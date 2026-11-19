@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>TravelEdge</title>
+  <meta name="theme-color" content="#0a0f1c">
+  <meta name="referrer" content="no-referrer">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f1a33'/%3E%3Cpath d='M8 21 24 9M17 9h7v7' stroke='%2334d399' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="#/overview">
+      <span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M5 17 19 5M12 5h7v7"/></svg></span>
+      <span class="brand-name">TravelEdge</span>
+    </a>
+    <nav class="nav" id="nav"></nav>
+    <div class="sidebar-foot" id="sidebar-status"></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="menu-btn" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <div class="topbar-title">
+        <h1 id="page-title">Overview</h1>
+        <p id="page-sub" class="muted"></p>
+      </div>
+      <div class="topbar-actions">
+        <a class="pref-chip" href="#/settings" id="pref-chip" title="Departure airports & preferences"></a>
+        <div class="live" id="live-status"></div>
+        <div class="bell-wrap">
+          <button class="icon-btn" id="bell" aria-label="Notifications">
+            <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            <span class="badge-dot" id="bell-count" hidden></span>
+          </button>
+          <div class="notif-panel" id="notif-panel" hidden></div>
+        </div>
+      </div>
+    </header>
+    <section class="content" id="view" aria-live="polite"></section>
+  </main>
+</div>
+
+<div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+<aside class="drawer" id="drawer" aria-hidden="true"></aside>
+<nav class="mobile-nav" aria-label="Main">
+  <a href="#overview" data-nav="overview">Discover</a>
+  <a href="#saved" data-nav="saved">Saved</a>
+  <a href="#alerts" data-nav="alerts">Alerts</a>
+  <a href="#settings" data-nav="settings">Settings</a>
+</nav>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
