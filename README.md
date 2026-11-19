@@ -189,3 +189,9 @@ bypasses authentication, CAPTCHAs or bot protection.
 * "Error fare" labels are always **suspected**: either the publisher calls it one, or the price is an
   extreme statistical outlier. Airlines may cancel mistaken fares.
 * TravelEdge never books, pays, or stores payment data.
+
+---
+
+## License
+
+MIT – see [LICENSE](LICENSE).
