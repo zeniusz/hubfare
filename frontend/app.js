@@ -159,6 +159,18 @@ function fromOptions(sel) {
   return `<option value="">From any airport</option>${hubs.length ? `<optgroup label="Your home airports">${hubs.map(opt).join("")}</optgroup>` : ""}` +
     (others.length ? `<optgroup label="Other airports">${others.map(opt).join("")}</optgroup>` : "");
 }
+// "Search & book": exact searches from the post first, then searches HubFare builds from route + dates
+function bookingSection(d) {
+  const links = d.booking || [];
+  if (!links.length) return "";
+  const fromPost = links.filter((l) => l.from_post), built = links.filter((l) => !l.from_post);
+  const row = (l) => `<a class="book-link" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">
+      <span class="site">${esc(l.site)}</span><span class="lbl">${esc(l.label)}</span>${ic("ext")}</a>`;
+  return `<div class="sec"><h4>Search &amp; book</h4>
+    ${fromPost.length ? `<div class="muted" style="font-size:12px;margin-bottom:6px">Exact searches from the original post</div><div class="book-list">${fromPost.map(row).join("")}</div>` : ""}
+    ${built.length ? `<div class="muted" style="font-size:12px;margin:${fromPost.length ? 12 : 0}px 0 6px">${d.depart_date ? "Live searches for these dates" : "Live searches – pick your dates on the site"}</div><div class="book-list">${built.map(row).join("")}</div>` : ""}
+    <div class="muted" style="font-size:11.5px;margin-top:8px">Opens a live search – the advertised price may have changed. HubFare never books anything.</div></div>`;
+}
 function listRow(d) {
   const when = d.depart_date ? `${fmtDate(d.depart_date)} – ${fmtDate(d.return_date)}` : d.nights ? `${d.nights} nights` : esc((d.travel_window || "flexible").slice(0, 24));
   return `<div class="lrow" data-id="${d.id}" tabindex="0">
@@ -326,6 +338,7 @@ async function openDeal(id) {
         <div><div class="k">Typical comparable</div><div class="v num">${eur(d.reference)}</div><div class="k">${b.history_n ? `${b.history_n} observed prices` : "model reference"}</div></div>
         <div><div class="k">Estimated savings</div><div class="v save num">${eur(d.savings)}</div><div class="k">${Math.round(d.discount)}% below typical</div></div>
       </div></div>
+    ${bookingSection(d)}
     <div class="sec"><h4>Deal Score ${d.score}/100 · ${esc(b.band || "")}</h4>
       <div class="breakdown">
         <div class="line"><span>Base points from ${Math.round(d.discount)}% discount vs. reference</span><span class="pos">${b.base_points ?? "—"}</span></div>
@@ -358,7 +371,10 @@ async function openDeal(id) {
     ${d.comparables.length ? `<div class="sec"><h4>Same destination, other offers</h4><div class="breakdown">${d.comparables.map((c) => `<div class="line"><span>${esc(c.origin)} <span class="muted">· ${esc(c.provider)}${c.duplicate ? " · duplicate" : ""}</span></span><span class="num">${eur(c.price)} <span class="muted">· ${c.score}</span></span></div>`).join("")}</div></div>` : ""}
     ${d.also_seen_at.length ? `<div class="sec"><h4>Also published by</h4><div class="breakdown">${d.also_seen_at.map((x) => `<div class="line"><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.provider)}</a><span>${eur(x.price)}</span></div>`).join("")}</div></div>` : ""}
     <div class="cta-row">
-      <a class="btn primary" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">View offer at ${esc(d.provider_name)} ${ic("ext")}</a>
+      ${(d.booking || []).length
+        ? `<a class="btn primary" href="${esc(d.booking[0].url)}" target="_blank" rel="noopener noreferrer">Search on ${esc(d.booking[0].site)} ${ic("ext")}</a>
+           <a class="btn" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">Read post</a>`
+        : `<a class="btn primary" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">View offer at ${esc(d.provider_name)} ${ic("ext")}</a>`}
       <button class="btn" id="dr-save">${ic("saved")}${d.saved ? "Saved" : "Save"}</button>
     </div>
     <p class="muted" style="font-size:11.5px;padding:0 24px 24px;margin:0">HubFare never books or pays for anything. Always confirm the final price, baggage and fees with the provider.</p>`;

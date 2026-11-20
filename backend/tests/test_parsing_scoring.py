@@ -279,3 +279,25 @@ def test_month_calendar_picks_cheapest_day(monkeypatch):
     st = items[0].structured
     assert st["price"] == 389 and st["depart_date"] == "2031-03-11" and st["dest_iata"] == "BKK"
     assert st["back_arrive_at"].startswith("2031-03-25T21:00")
+
+
+def test_booking_links_unwrapped_from_affiliate_redirect():
+    from app.booking import extract_links
+    html = ('<p>Vienna: <a href="https://skyscanner.pxf.io/c/3014057/1027991/13416?subId1=NOV19&amp;'
+            'u=https%3A%2F%2Fwww.skyscanner.at%2Ftransport%2Fflights%2Fvie%2Fmru%2F261125%2F261209%2F%3Fadultsv2%3D1">'
+            'Vienna</a> <a href="https://example.com/hotel">hotel</a></p>')
+    links = extract_links(html)
+    assert len(links) == 1
+    assert links[0]["url"].startswith("https://www.skyscanner.at/transport/flights/vie/mru/261125/261209/")
+    assert links[0]["label"] == "VIE → MRU · 25 Nov – 9 Dec" and links[0]["from_post"]
+
+
+def test_built_search_links_for_route_and_connection():
+    from app.booking import build_links, skyscanner_url
+    assert skyscanner_url("VNO", "NYC", "2027-02-14", "2027-02-28") == \
+        "https://www.skyscanner.net/transport/flights/vno/nyca/270214/270228/?adultsv2=1&cabinclass=economy&rtn=1"
+    links = build_links(["ARN"], "PEK", "2027-02-14", "2027-02-28",
+                        {"mode": "flight", "hub": "VNO", "gateway": "ARN"})
+    sites = [l["site"] for l in links]
+    assert sites.count("Skyscanner") == 2 and "Google Flights" in sites and "Aviasales" in sites
+    assert links[-1]["label"] == "Connecting flight VNO → ARN"

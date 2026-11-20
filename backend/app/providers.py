@@ -35,6 +35,7 @@ class RawItem:
     image_url: str = ""
     default_origin: str = "EU*"
     structured: dict | None = None  # API providers supply parsed fields directly
+    booking_links: list | None = None  # booking-search links found inside the post
 
 
 @dataclass
@@ -82,6 +83,12 @@ PROVIDERS.append(ProviderDef(
     "EU*", 180, True, requires="TRAVELPAYOUTS_TOKEN",
     notes="Whole-month price calendars from your home hubs to long-haul destinations – the cheapest day of each "
           "month, like browsing Skyscanner's month view. No dates needed.", focus=["flight"]))
+PROVIDERS.append(ProviderDef(
+    "tp_special", "Aviasales special offers (Travelpayouts)", "api",
+    "https://api.travelpayouts.com/aviasales/v3/get_special_offers", "https://www.travelpayouts.com",
+    "EU*", 60, True, requires="TRAVELPAYOUTS_TOKEN",
+    notes="Abnormally low fares flagged by Aviasales from your home hubs (cached data – re-checked before alerts).",
+    focus=["flight"]))
 PROVIDER_BY_KEY = {p.key: p for p in PROVIDERS}
 
 # long-haul destinations where exceptional fares appear most often (rotated, a few per run)
@@ -154,10 +161,13 @@ def fetch_rss(p: ProviderDef) -> tuple[list[RawItem], int]:
         if e.get("published_parsed"):
             pub = datetime.fromtimestamp(calendar.timegm(e.published_parsed), tz=timezone.utc).replace(tzinfo=None)
         summary = e.get("summary", "")
-        if e.get("content"):
-            summary = summary + " " + e.content[0].get("value", "")[:1500]
+        full = e.content[0].get("value", "") if e.get("content") else ""
+        if full:
+            summary = summary + " " + full[:1500]
+        from .booking import extract_links
+        links = extract_links(full or e.get("summary", ""))
         items.append(RawItem(p.key, e.get("id") or e.get("link", ""), e.get("link", ""), e.get("title", ""),
-                             summary, pub, _entry_image(e), p.market))
+                             summary, pub, _entry_image(e), p.market, booking_links=links or None))
     return items, 1
 
 
@@ -170,6 +180,49 @@ def _arrival(departure_at: str | None, minutes) -> str:
         return (datetime.fromisoformat(departure_at) + _td(minutes=int(minutes))).isoformat()
     except (ValueError, TypeError):
         return ""
+
+
+def fetch_travelpayouts_special(p: ProviderDef, hubs: list[str]) -> tuple[list[RawItem], int]:
+    """Aviasales 'special offers' – fares the data feed itself marks as unusually low."""
+    if not TRAVELPAYOUTS_TOKEN:
+        raise LookupError("needs_credentials")
+    from .geo import IATA_TO_DEST
+    items: list[RawItem] = []
+    calls = 0
+    with _client() as c:
+        for origin in hubs:
+            r = c.get(p.url, params={"origin": origin, "currency": "eur", "locale": "en"},
+                      headers={"X-Access-Token": TRAVELPAYOUTS_TOKEN})
+            calls += 1
+            if r.status_code == 429:
+                time.sleep(5)
+                continue
+            if r.status_code >= 400:
+                continue
+            for t in (r.json() or {}).get("data") or []:
+                dst = t.get("destination") or t.get("destination_airport")
+                dest = IATA_TO_DEST.get(dst)
+                price = t.get("price") or t.get("value")
+                if not dest or not price:
+                    continue
+                dep, ret = (t.get("departure_at") or "")[:10], (t.get("return_at") or "")[:10]
+                link = t.get("link") or ""
+                link = ("https://www.aviasales.com" + link) if link.startswith("/") else (link or "https://www.aviasales.com")
+                if TRAVELPAYOUTS_MARKER:
+                    link += ("&" if "?" in link else "?") + f"marker={TRAVELPAYOUTS_MARKER}"
+                ext = hashlib.sha1(f"spec{origin}{dst}{dep}{ret}{price}".encode()).hexdigest()
+                trip = "return" if ret else "one_way"
+                items.append(RawItem(
+                    p.key, ext, link,
+                    f"{origin} → {dest.name}: €{float(price):.0f} {'return' if ret else 'one-way'} – Aviasales special offer",
+                    t.get("title") or "", None, "", origin,
+                    structured={"origin": origin, "dest_key": dest.key, "price": float(price), "currency": "EUR",
+                                "depart_date": dep, "return_date": ret, "airline": t.get("airline", ""),
+                                "dest_iata": dst, "trip_type": trip, "depart_at": t.get("departure_at") or "",
+                                "back_arrive_at": _arrival(t.get("return_at"), t.get("duration_back"))},
+                ))
+            time.sleep(0.4)
+    return items, calls
 
 
 def fetch_travelpayouts_calendar(p: ProviderDef, hubs: list[str], targets: list[str],

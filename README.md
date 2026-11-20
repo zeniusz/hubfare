@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.svg" alt="HubFare" width="420"></p>
+
 # HubFare — automated exceptional travel deal intelligence
 
 HubFare is **not** a flight search engine. A background worker continuously scans permitted
@@ -15,11 +17,11 @@ Nothing is ever booked or purchased automatically.
 
 ![Overview – best opportunity, deals that may disappear soon and the latest exceptional deals](docs/screenshots/overview.jpg)
 
-| Holiday packages, priced from your home airport | Cruises in the compact list view |
+| Flight deals – error fares, long-haul and last minute | Cruises in the compact list view, complete trip cost |
 |---|---|
-| ![Holiday packages](docs/screenshots/holiday-packages.jpg) | ![Cruises list](docs/screenshots/cruises-list.jpg) |
+| ![Flight deals](docs/screenshots/flight-deals.jpg) | ![Cruises list](docs/screenshots/cruises-list.jpg) |
 
-![Deal details – complete price from your hub and a transparent score breakdown](docs/screenshots/deal-details.jpg)
+![Deal details – Search & book with the exact Skyscanner searches from the original post](docs/screenshots/deal-details.jpg)
 
 <sub>Screenshots show real offers found on 20 Nov 2026; destination photos come from the deal sources and Wikimedia Commons.</sub>
 
@@ -43,6 +45,8 @@ Preferences → Automated scanning → Parse & normalise (EUR) → De-duplicate 
 | De-duplication across sources, price-change detection, price history | ✅ Implemented |
 | Destination photography (feed images, else Wikipedia/Wikimedia Commons) | ✅ Live |
 | Dashboard: Overview, Flight Deals, Holiday Packages, Cruises + Flights, Saved, Alerts, Settings; Cards/List view; phone bottom navigation | ✅ Implemented, responsive |
+| **Search & book**: direct Skyscanner / Google Flights / Aviasales searches for every flight deal – the exact searches linked in the original post (affiliate redirects removed) plus searches built from the route and dates | ✅ Implemented & tested on live posts |
+| Aviasales "special offers" (abnormally low fares) from your home hubs | 🔑 Implemented, needs `TRAVELPAYOUTS_TOKEN` |
 | **From [airport]** picker on every deal page: all deals re-priced as trips from the airport you choose – no dates needed | ✅ Implemented |
 | Whole-month fare calendars (cheapest day per month) from your hubs to 24 long-haul destinations; same-day self-transfer connections with ≥ 3 h between separate tickets | 🔑 Implemented, needs `TRAVELPAYOUTS_TOKEN` (tested with recorded API responses) |
 | Every deal priced from your home hub (Vienna, Vilnius, Warsaw, Riga): train/bus to nearby airports, connecting flight (+ hotel night for long-haul) to far ones, matched to the deal's dates when Travelpayouts is connected | ✅ Implemented (estimates until a Travelpayouts token is added) |

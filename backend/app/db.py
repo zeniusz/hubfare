@@ -133,6 +133,8 @@ class Offer(Base):
     # exact times from fare APIs (ISO with UTC offset) – used to build same-day connections
     depart_at: Mapped[str] = mapped_column(String(30), default="")        # main flight leaves the departure airport
     back_arrive_at: Mapped[str] = mapped_column(String(30), default="")   # return flight lands back there
+    # booking-search links found in the deal post (None = article not read yet, [] = none found)
+    booking_links: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
 
 class PriceHistory(Base):

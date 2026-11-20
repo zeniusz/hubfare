@@ -19,7 +19,7 @@ from .images import destination_image
 from .parsing import ParsedDeal, parse_deal
 from . import positioning
 from .providers import (CALENDAR_TARGETS, PROVIDER_BY_KEY, PROVIDERS, fetch_rss, fetch_travelpayouts,
-                        fetch_travelpayouts_calendar)
+                        fetch_travelpayouts_calendar, fetch_travelpayouts_special)
 from .scoring import ScoreInput, band, classify, score
 
 log = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ def _parsed_from_structured(raw) -> ParsedDeal | None:
     o = ORIGIN_PLACES.get(st["origin"])
     return ParsedDeal(
         title=raw.title, price_amount=st["price"], currency=st["currency"], price_basis="per_person",
-        origin_codes=[st["origin"]], origin_label=o.name if o else st["origin"], dest=dest, trip_type="return",
+        origin_codes=[st["origin"]], origin_label=o.name if o else st["origin"], dest=dest, trip_type=st.get("trip_type", "return"),
         cabin="economy", nights=None, stars=None, board="", baggage="unknown", subtype="flight",
         error_keyword=False, luxury_signal=False, last_minute=False, cruise_port=None, fly_cruise_package=False,
         travel_window=f"{st['depart_date']} – {st['return_date']}", confidence=0.95, notes=[f"airline {st.get('airline')}"],
@@ -216,6 +216,8 @@ def _process(items, provider_key: str, stats: dict, need_images: list) -> None:
                 o.live_status, o.live_price_eur, o.live_checked_at = "", None, None  # old live check no longer applies
             text = f"{d.title} {raw.summary[:900]}"
             o.source_url = raw.url[:800]
+            if raw.booking_links:
+                o.booking_links = raw.booking_links
             o.title = d.title[:400]
             o.summary = (raw.summary or "")[:2000]
             o.subtype = d.subtype
@@ -333,6 +335,10 @@ def run_provider(key: str) -> dict:
             items, calls = fetch_rss(pdef)
         elif key == "travelpayouts":
             items, calls = fetch_travelpayouts(pdef, origins)
+        elif key == "tp_special":
+            with session_scope() as s2:
+                hubs, _ = positioning.home_settings(s2)
+            items, calls = fetch_travelpayouts_special(pdef, list(hubs))
         elif key == "tp_calendar":
             with session_scope() as s:
                 hubs, targets, months = _calendar_batch(s)
@@ -370,10 +376,13 @@ def run_provider(key: str) -> dict:
                 prov.consecutive_failures += 1
                 prov.status = "failing" if prov.consecutive_failures >= 2 else "degraded"
     if stats is not None:
-        if key in ("travelpayouts", "tp_calendar"):
+        if key in ("travelpayouts", "tp_calendar", "tp_special"):
             from . import duffel
             result["positioning"] = positioning.refresh_dated()  # connecting flights on the deal's own dates
             result["live_check"] = duffel.check_top_flights()  # confirm with airlines before alerting
+        if pdef.kind == "rss":
+            from . import booking
+            result["article_links"] = booking.enrich_from_articles()  # exact search links from the posts
         notify.process_new_offers(stats["new_ids"] + stats["dropped_ids"])
     result["error"] = err
     return result
@@ -387,8 +396,8 @@ def expire_offers() -> int:
         for o in s.query(Offer).filter(Offer.status == "active").all():
             age_ref = o.published_at or o.first_seen_at
             limit = EXPIRY_DAYS.get(o.subtype, 14)
-            stale_api = o.provider_key in ("travelpayouts", "tp_calendar") and o.last_seen_at < now - timedelta(hours=8 if o.provider_key == "travelpayouts" else 26)
-            blog_flight = o.subtype == "flight" and o.provider_key not in ("travelpayouts", "tp_calendar") and not RSS_FLIGHTS
+            stale_api = o.provider_key in ("travelpayouts", "tp_calendar", "tp_special") and o.last_seen_at < now - timedelta(hours=26 if o.provider_key == "tp_calendar" else 8)
+            blog_flight = o.subtype == "flight" and o.provider_key not in ("travelpayouts", "tp_calendar", "tp_special") and not RSS_FLIGHTS
             departed = o.depart_date and o.depart_date < now.strftime("%Y-%m-%d")
             if age_ref < now - timedelta(days=limit) or stale_api or blog_flight or o.provider_key in disabled or departed \
                     or excluded_origin(o.origin_codes or [o.origin_code]) or o.link_status == "gone":
@@ -451,7 +460,7 @@ def effective_price(o: Offer) -> float:
 def rescore_offer(s, o: Offer) -> None:
     from .parsing import parse_deal as _pd
     enabled = {a.iata for a in s.query(Airport).filter(Airport.enabled).all()}
-    d = _pd(o.title, o.summary, o.origin_code) if o.provider_key not in ("travelpayouts", "tp_calendar") else None
+    d = _pd(o.title, o.summary, o.origin_code) if o.provider_key not in ("travelpayouts", "tp_calendar", "tp_special") else None
     if d is None:
         d = ParsedDeal(o.title, o.price_original, o.currency, o.price_basis, o.origin_codes or [o.origin_code],
                        o.origin_label, DEST_PLACES.get(o.dest_key), o.trip_type, o.cabin, o.nights, o.stars,
@@ -466,9 +475,9 @@ def rescore_all() -> int:
     with session_scope() as s:
         enabled = {a.iata for a in s.query(Airport).filter(Airport.enabled).all()}
         for o in s.query(Offer).filter(Offer.status == "active", Offer.is_demo.is_(False)).all():
-            d = _pd(o.title, o.summary, o.origin_code) if o.provider_key not in ("travelpayouts", "tp_calendar") else None
+            d = _pd(o.title, o.summary, o.origin_code) if o.provider_key not in ("travelpayouts", "tp_calendar", "tp_special") else None
             if d is None:
-                if o.provider_key not in ("travelpayouts", "tp_calendar"):
+                if o.provider_key not in ("travelpayouts", "tp_calendar", "tp_special"):
                     o.status = "expired"  # parser rules tightened: no longer a qualifying offer
                     continue
                 d = ParsedDeal(o.title, o.price_original, o.currency, o.price_basis, o.origin_codes or [o.origin_code],

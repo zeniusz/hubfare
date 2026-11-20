@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200" role="img" aria-label="HubFare">
+  <defs>
+    <radialGradient id="glow1" cx="1" cy="0" r=".7"><stop offset="0" stop-color="#0f8f86" stop-opacity=".55"/><stop offset="1" stop-color="#050b1f" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glow2" cx="0" cy="1" r=".6"><stop offset="0" stop-color="#0f6f86" stop-opacity=".45"/><stop offset="1" stop-color="#050b1f" stop-opacity="0"/></radialGradient>
+    <linearGradient id="hf-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a3a9c"/><stop offset=".55" stop-color="#10306e"/><stop offset="1" stop-color="#0f8f86"/></linearGradient>
+    <linearGradient id="hf-tail" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#38f0a8" stop-opacity="0"/><stop offset=".55" stop-color="#38f0a8" stop-opacity=".55"/><stop offset="1" stop-color="#38f0a8"/></linearGradient>
+  </defs>
+  <rect width="640" height="200" rx="24" fill="#050b1f"/>
+  <rect width="640" height="200" rx="24" fill="url(#glow1)"/>
+  <rect width="640" height="200" rx="24" fill="url(#glow2)"/>
+  <g transform="translate(118 50) scale(1.5625)">
+    <rect width="64" height="64" rx="16" fill="url(#hf-bg)"/>
+    <path d="M3 52 C 18 44, 30 35, 44 23 L 47 26 C 34 38, 22 47, 9 60 Z" fill="url(#hf-tail)"/>
+    <path d="M24 39 C 32 33, 39 27, 46 20" fill="none" stroke="#3ef0aa" stroke-width="5" stroke-linecap="round"/>
+    <path d="M34 18 H48 V32" fill="none" stroke="#3ef0aa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="248" y="128" fill="#ffffff" font-family="'Instrument Serif', 'Georgia', 'Times New Roman', serif" font-size="78" letter-spacing="1">HubFare</text>
+</svg>

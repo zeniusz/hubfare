@@ -90,7 +90,27 @@ def _from_airport(s, o: Offer, d: dict, code: str) -> dict | None:
     d["positioning"] = pos
     d["home_total"] = round(base + extra) if extra else None
     d["picked_airport"] = code
+    d["booking"] = _links(o, d)[:12]  # search links from the picked airport
     return d
+
+
+def _links(o: Offer, d: dict) -> list[dict]:
+    """Booking-search links: first the exact ones from the post, then HubFare-built searches."""
+    from . import booking
+    from .geo import DEST_PLACES
+    if o.subtype != "flight":
+        return []
+    dest = o.dest_iata or (DEST_PLACES[o.dest_key].iata if o.dest_key in DEST_PLACES else "")
+    built = []
+    if dest:
+        pos = d.get("positioning") or {}
+        origins = [c for c in (o.origin_codes or [o.origin_code]) if not c.endswith("*")]
+        if not origins and pos.get("hub"):
+            origins = [pos["hub"]]
+        if pos.get("mode") in ("home", "nearby") and pos.get("hub") and pos["hub"] not in origins:
+            origins = [pos["hub"]] + origins
+        built = booking.build_links(origins, dest, o.depart_date or "", o.return_date or "", pos)
+    return (o.booking_links or []) + built
 
 
 def _cruise_split(tc: dict | None) -> dict | None:
@@ -146,6 +166,7 @@ def ser(o: Offer, my_codes=frozenset(), my_cc=frozenset(), saved=frozenset(), fu
         "live_status": o.live_status, "live_price": round(o.live_price_eur) if o.live_price_eur else None,
         "live_detail": o.live_detail, "live_checked_at": _iso(o.live_checked_at),
     }
+    d["booking"] = _links(o, d)[:12]
     if full:
         d["breakdown"] = b
         d["summary"] = o.summary[:1500]

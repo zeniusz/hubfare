@@ -90,7 +90,16 @@ def format_offer(o: Offer) -> tuple[str, str]:
     from .providers import PROVIDER_BY_KEY
     lines.append(f"Provider: {PROVIDER_BY_KEY[o.provider_key].name if o.provider_key in PROVIDER_BY_KEY else o.provider_key}")
     lines.append(f"Last verified: {_ago(o.last_verified_at or o.last_seen_at)}")
-    lines.append(f"View offer: {o.source_url}")
+    links = (o.booking_links or [])
+    if not links and o.subtype == "flight":
+        from .booking import build_links
+        from .geo import DEST_PLACES
+        dest = o.dest_iata or (DEST_PLACES[o.dest_key].iata if o.dest_key in DEST_PLACES else "")
+        origins = [c for c in (o.origin_codes or [o.origin_code]) if not c.endswith("*")] or [b.get("positioning", {}).get("hub", "")]
+        links = build_links(origins, dest, o.depart_date or "", o.return_date or "") if dest else []
+    if links:
+        lines.append(f"Search & book ({links[0]['site']}): {links[0]['url']}")
+    lines.append(f"Original post: {o.source_url}")
     lines.append("Prices change quickly – check the final price before booking. HubFare never books automatically.")
     return title, "\n".join(lines)
 
