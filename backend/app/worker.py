@@ -93,7 +93,7 @@ def main():
 
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
-    log.info("TravelEdge worker started")
+    log.info("HubFare worker started")
     sched.start()
 
 

@@ -229,3 +229,53 @@ def test_worldwide_cruises_are_kept_but_foreign_flights_are_not():
     d = parse_deal("7-night Bahamas cruise from Miami for $299", "", "EU*")
     assert d is not None and d.subtype == "cruise" and d.dest.key == "bahamas" and d.cruise_port.key == "miami"
     assert parse_deal("Flights from Bangkok to Oslo for €300", "", "EU*") is None
+
+
+def test_same_day_connection_needs_safe_transfer_time():
+    from app.positioning import pick_outbound, pick_return
+    # main flight Stockholm → Beijing leaves 18:30 (UTC+1)
+    flights_in = [
+        {"price": 29, "departure_at": "2031-02-14T15:00:00+01:00", "duration_to": 95},   # lands 16:35 – too tight
+        {"price": 45, "departure_at": "2031-02-14T11:10:00+01:00", "duration_to": 95},   # lands 12:45 – OK
+        {"price": 39, "departure_at": "2031-02-14T07:00:00+01:00", "duration_to": 95},   # lands 08:35 – OK, cheapest
+    ]
+    best = pick_outbound(flights_in, "2031-02-14T18:30:00+01:00", 3)
+    assert best["price"] == 39
+    assert pick_outbound(flights_in[:1], "2031-02-14T18:30:00+01:00", 3) is None  # only the tight one → day before
+    # back from Beijing lands in Stockholm 14:00; flights home must leave ≥ 17:00
+    flights_home = [{"price": 25, "departure_at": "2031-02-28T15:30:00+01:00", "duration_to": 90},
+                    {"price": 52, "departure_at": "2031-02-28T19:45:00+01:00", "duration_to": 90}]
+    assert pick_return(flights_home, "2031-02-28T14:00:00+01:00", 3)["price"] == 52
+
+
+def test_arrival_time_from_departure_and_duration():
+    from app.providers import _arrival
+    assert _arrival("2031-02-28T09:00:00+08:00", 660) == "2031-02-28T20:00:00+08:00"
+    assert _arrival("", 100) == "" and _arrival("2031-02-28T09:00:00+08:00", None) == ""
+
+
+def test_month_calendar_picks_cheapest_day(monkeypatch):
+    from app import providers
+
+    class Resp:
+        status_code = 200
+        def json(self):
+            return {"success": True, "data": {
+                "2031-03-04": {"price": 512, "departure_at": "2031-03-04T10:00:00+02:00", "return_at": "2031-03-18T09:00:00+07:00",
+                               "duration_back": 720, "airline": "QR", "link": "/search/VNO0403BKK18031"},
+                "2031-03-11": {"price": 389, "departure_at": "2031-03-11T10:00:00+02:00", "return_at": "2031-03-25T09:00:00+07:00",
+                               "duration_back": 720, "airline": "TK", "link": "/search/VNO1103BKK25031"}}}
+
+    class Client:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def get(self, url, **kw): return Resp()
+
+    monkeypatch.setattr(providers, "TRAVELPAYOUTS_TOKEN", "test")
+    monkeypatch.setattr(providers, "_client", lambda: Client())
+    monkeypatch.setattr(providers.time, "sleep", lambda s: None)
+    items, calls = providers.fetch_travelpayouts_calendar(providers.PROVIDER_BY_KEY["tp_calendar"], ["VNO"], ["BKK"], ["2031-03"])
+    assert calls == 1 and len(items) == 1
+    st = items[0].structured
+    assert st["price"] == 389 and st["depart_date"] == "2031-03-11" and st["dest_iata"] == "BKK"
+    assert st["back_arrive_at"].startswith("2031-03-25T21:00")

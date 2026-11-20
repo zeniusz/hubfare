@@ -29,6 +29,31 @@ The worker re-checks `robots.txt` daily and stops if a feed becomes disallowed.
 Flight deals come from both: the fare APIs above and flight posts from the deal blogs (TravelFree.info, Fly4free,
 Travel-Dealz…). Blog fares are priced from your home hub like everything else. Set `RSS_FLIGHTS=false` to use the APIs only.
 
+## How deal sites find fares – and how HubFare does the same legally
+
+Deal publishers such as TravelFree.info appear to find fares mostly by hand: editors browse flexible searches on
+Skyscanner ("Everywhere", whole-month view) and Google Flights, and then post what is unusually cheap. Those sites
+cannot be queried automatically (no public API, scraping forbidden), so HubFare does the equivalent with permitted data:
+
+| Their manual step | HubFare (automatic) |
+|---|---|
+| "From Vilnius to Everywhere" | `travelpayouts`: cheapest fares from each departure airport to **any** destination, hourly, rotating through 12 airports at a time |
+| Month view: cheapest day of the month | `tp_calendar`: whole-month price calendar from your home hubs to 24 long-haul destinations (cheapest day per month, next 3 months) |
+| "Is this cheap?" | Deal score against typical prices and price history |
+| Fly to Stockholm, then on to China | Connecting flights from your hub, same day with ≥ `MIN_CONNECTION_HOURS` (default 3 h) between separate tickets, otherwise the evening before + hotel night |
+
+HubFare also keeps reading the blogs themselves, so anything their editors find shows up too.
+
+## Lithuanian travel agencies (checked 20 Nov 2026)
+
+Novaturas, Tez Tour, Join UP!, Gruda, Kelionių akademija and skrendu.lt publish **no RSS feed**; travelplanet.lt has a
+feed with travel stories only. Lithuanian departures currently come from TravelFree.info, Fly4free and Makalius.
+Agency offers can be added with their affiliate/XML feeds, or by parsing their newsletters from a mailbox.
+
+## UK deals
+
+Deals that depart only from the UK are hidden (`EXCLUDED_ORIGIN_COUNTRIES=GB`), and HolidayPirates (UK edition) is off.
+
 ## Researched – not integrated
 
 | Source | Reason |

@@ -303,7 +303,7 @@ def parse_deal(title: str, summary: str, default_origin: str = "EU*") -> ParsedD
         subtype = "cruise"
     elif has_package_words and (nights or board or stars or not has_flight_words):
         if not flights_included:
-            return None  # TravelEdge packages must include flights + accommodation
+            return None  # HubFare packages must include flights + accommodation
         if not flights_stated:
             confidence -= 0.1
             notes.append("flights inferred from the departure city, not stated – check inclusion")

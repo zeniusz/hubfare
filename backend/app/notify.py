@@ -91,7 +91,7 @@ def format_offer(o: Offer) -> tuple[str, str]:
     lines.append(f"Provider: {PROVIDER_BY_KEY[o.provider_key].name if o.provider_key in PROVIDER_BY_KEY else o.provider_key}")
     lines.append(f"Last verified: {_ago(o.last_verified_at or o.last_seen_at)}")
     lines.append(f"View offer: {o.source_url}")
-    lines.append("Prices change quickly – check the final price before booking. TravelEdge never books automatically.")
+    lines.append("Prices change quickly – check the final price before booking. HubFare never books automatically.")
     return title, "\n".join(lines)
 
 
@@ -255,12 +255,12 @@ def send_daily_digest() -> dict:
             matched = [o for o in offers if rule_matches(r, o) and o.live_status != "unavailable"][:12]
             if not matched:
                 continue
-            lines = [f"TravelEdge daily digest — {len(matched)} new deal(s) for “{r.name}”", ""]
+            lines = [f"HubFare daily digest — {len(matched)} new deal(s) for “{r.name}”", ""]
             for o in matched:
                 total = (o.score_breakdown or {}).get("effective_total") or o.price_eur
                 lines.append(f"• {o.deal_score}/100  {o.origin_label} → {o.dest_label}  €{total:,.0f}  "
                              f"(typ. €{o.reference_price:,.0f})  {o.source_url}")
-            jobs.append((r.id, f"digest:{utcnow():%Y-%m-%d}", r.channels or ["inapp"], f"TravelEdge digest: {len(matched)} new deals",
+            jobs.append((r.id, f"digest:{utcnow():%Y-%m-%d}", r.channels or ["inapp"], f"HubFare digest: {len(matched)} new deals",
                          "\n".join(lines), len(matched)))
     for rid, key, chans, title, body, n in jobs:
         deliver(rid, key, None, chans, title, body, "digest")
@@ -278,5 +278,5 @@ def send_test(channels: list[str], offer_id: int | None = None) -> list[dict]:
             title, body = format_offer(o)
             url = o.source_url
         else:
-            title, body, url = "TravelEdge test notification", "Your notification channel works.", ""
+            title, body, url = "HubFare test notification", "Your notification channel works.", ""
     return deliver(None, f"test:{utcnow().isoformat()}", offer_id, channels, "[TEST] " + title, "[TEST]\n" + body, "test", url)

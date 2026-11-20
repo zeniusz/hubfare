@@ -1,4 +1,4 @@
-/* TravelEdge dashboard – dependency-free SPA (ECharts for charts). */
+/* HubFare dashboard – dependency-free SPA (ECharts for charts). */
 "use strict";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -151,6 +151,14 @@ function dealCard(d, compact = false) {
 }
 // compact table-like view for scanning many offers quickly
 const listHead = () => `<div class="lrow head"><span>Destination</span><span>Route</span><span>Dates</span><span class="r">Total</span><span class="r">Saving</span><span class="r">Score</span></div>`;
+// departure airports for the "From" picker: home hubs first, then the other airports being watched
+function fromOptions(sel) {
+  const ap = state.airports || [];
+  const opt = (a) => `<option value="${a.iata}" ${sel === a.iata ? "selected" : ""}>From ${esc(a.city)} (${a.iata})</option>`;
+  const hubs = ap.filter((a) => a.home), others = ap.filter((a) => !a.home && a.enabled);
+  return `<option value="">From any airport</option>${hubs.length ? `<optgroup label="Your home airports">${hubs.map(opt).join("")}</optgroup>` : ""}` +
+    (others.length ? `<optgroup label="Other airports">${others.map(opt).join("")}</optgroup>` : "");
+}
 function listRow(d) {
   const when = d.depart_date ? `${fmtDate(d.depart_date)} – ${fmtDate(d.return_date)}` : d.nights ? `${d.nights} nights` : esc((d.travel_window || "flexible").slice(0, 24));
   return `<div class="lrow" data-id="${d.id}" tabindex="0">
@@ -244,6 +252,7 @@ async function viewCategory(v, cat) {
   }).join("");
   v.innerHTML = `<div class="filters">${chips}
       <button class="chip ${f.relevant ? "on" : ""}" data-f="relevant">${ic("pin")}From my airports</button>
+      <select id="f-from" title="Show every deal as a trip from this airport">${fromOptions(f.from)}</select>
       <select id="f-region"><option value="">All destinations</option>${regions.map((r) => `<option value="${r.key}" ${f.region === r.key ? "selected" : ""}>${esc(r.label)}</option>`).join("")}</select>
       <select id="f-sort">${[["score", "Best score"], ["new", "Newest"], ["price", "Lowest price"], ["savings", "Biggest savings"]].map(([k, l]) => `<option value="${k}" ${f.sort === k ? "selected" : ""}>${l}</option>`).join("")}</select>
       <span class="spacer"></span><span class="result-count" id="count"></span>
@@ -255,6 +264,7 @@ async function viewCategory(v, cat) {
     if (k === "own" && f.own) f.fly = false;
     store.set("te-filters", state.filters); viewCategory(v, cat);
   }));
+  $("#f-from").onchange = (e) => { f.from = e.target.value; store.set("te-filters", state.filters); load(); };
   $("#f-region").onchange = (e) => { f.region = e.target.value; store.set("te-filters", state.filters); load(); };
   v.querySelectorAll("[data-layout]").forEach((b) => (b.onclick = () => { store.set("te-layout", b.dataset.layout); viewCategory(v, cat); }));
   $("#f-sort").onchange = (e) => { f.sort = e.target.value; store.set("te-filters", state.filters); load(); };
@@ -264,6 +274,7 @@ async function viewCategory(v, cat) {
     if (f.last_minute) q.set("last_minute", "true");
     if (f.relevant) q.set("relevant", "true");
     if (f.region) q.set("region", f.region);
+    if (f.from) q.set("from_airport", f.from);
     if (f.fly) q.set("trip_kind", "fly_cruise_package");
     if (f.own) q.set("trip_kind", "independent_combination");
     let { items, count } = await api("/offers?" + q);
@@ -350,7 +361,7 @@ async function openDeal(id) {
       <a class="btn primary" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">View offer at ${esc(d.provider_name)} ${ic("ext")}</a>
       <button class="btn" id="dr-save">${ic("saved")}${d.saved ? "Saved" : "Save"}</button>
     </div>
-    <p class="muted" style="font-size:11.5px;padding:0 24px 24px;margin:0">TravelEdge never books or pays for anything. Always confirm the final price, baggage and fees with the provider.</p>`;
+    <p class="muted" style="font-size:11.5px;padding:0 24px 24px;margin:0">HubFare never books or pays for anything. Always confirm the final price, baggage and fees with the provider.</p>`;
   $("#dr-close").onclick = closeDeal;
   $("#dr-save").onclick = async () => { const r = await api(`/offers/${id}/save`, { method: "POST" }); $("#dr-save").innerHTML = ic("saved") + (r.saved ? "Saved" : "Save"); toast(r.saved ? "Saved to your deals" : "Removed from saved"); };
   if (d.history.length > 1 && window.echarts) {
@@ -578,7 +589,7 @@ function renderNotifPanel() {
 }
 
 /* ------------------------------------------------------------------ router */
-function setTitle(t, sub) { $("#page-title").textContent = t; $("#page-sub").textContent = sub || ""; document.title = t === "Overview" ? "TravelEdge" : `${t} · TravelEdge`; }
+function setTitle(t, sub) { $("#page-title").textContent = t; $("#page-sub").textContent = sub || ""; document.title = t === "Overview" ? "HubFare" : `${t} · HubFare`; }
 async function route() {
   const id = (location.hash.replace(/^#\/?/, "") || "overview").split("?")[0];
   renderNav(id);
@@ -622,6 +633,7 @@ document.addEventListener("click", (e) => { if (!e.target.closest(".bell-wrap"))
     renderMonitoring(o.monitoring, o.my_airports);
     setBell(o.unread);
   } catch {}
+  try { state.airports = (await api("/airports")).airports; } catch { state.airports = []; }
   await pollNotifications();
   route();
   setInterval(pollNotifications, 60000);

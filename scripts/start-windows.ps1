@@ -1,4 +1,4 @@
-# Starts the TravelEdge API (dashboard) and the background worker as two hidden processes.
+# Starts the HubFare API (dashboard) and the background worker as two hidden processes.
 # Usage:  powershell -ExecutionPolicy Bypass -File scripts\start-windows.ps1 [-Python C:\path\to\python.exe]
 # To run at every logon, create a Task Scheduler task "At log on" that runs this script.
 param([string]$Python = "python")
@@ -12,4 +12,4 @@ Start-Process -WindowStyle Hidden -WorkingDirectory $backend -FilePath $Python `
 Start-Process -WindowStyle Hidden -WorkingDirectory $backend -FilePath $Python `
   -ArgumentList "-m","app.worker" `
   -RedirectStandardOutput (Join-Path $data "worker.log") -RedirectStandardError (Join-Path $data "worker.err.log")
-Write-Host "TravelEdge running: http://localhost:8000  (logs in $data)"
+Write-Host "HubFare running: http://localhost:8000  (logs in $data)"

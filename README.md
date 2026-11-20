@@ -1,6 +1,6 @@
-# TravelEdge — automated exceptional travel deal intelligence
+# HubFare — automated exceptional travel deal intelligence
 
-TravelEdge is **not** a flight search engine. A background worker continuously scans permitted
+HubFare is **not** a flight search engine. A background worker continuously scans permitted
 European deal sources, normalises every offer, scores it against what that trip *normally* costs,
 and surfaces only the genuinely exceptional ones in three categories:
 
@@ -43,6 +43,8 @@ Preferences → Automated scanning → Parse & normalise (EUR) → De-duplicate 
 | De-duplication across sources, price-change detection, price history | ✅ Implemented |
 | Destination photography (feed images, else Wikipedia/Wikimedia Commons) | ✅ Live |
 | Dashboard: Overview, Flight Deals, Holiday Packages, Cruises + Flights, Saved, Alerts, Settings; Cards/List view; phone bottom navigation | ✅ Implemented, responsive |
+| **From [airport]** picker on every deal page: all deals re-priced as trips from the airport you choose – no dates needed | ✅ Implemented |
+| Whole-month fare calendars (cheapest day per month) from your hubs to 24 long-haul destinations; same-day self-transfer connections with ≥ 3 h between separate tickets | 🔑 Implemented, needs `TRAVELPAYOUTS_TOKEN` (tested with recorded API responses) |
 | Every deal priced from your home hub (Vienna, Vilnius, Warsaw, Riga): train/bus to nearby airports, connecting flight (+ hotel night for long-haul) to far ones, matched to the deal's dates when Travelpayouts is connected | ✅ Implemented (estimates until a Travelpayouts token is added) |
 | Alerts: rules by airport / destination region / category / max price / min score / nights / cabin; instant vs daily digest; never sends twice | ✅ Implemented |
 | In-app + browser notifications | ✅ Working without setup |
@@ -90,7 +92,7 @@ On Windows you can start both hidden with `scripts\start-windows.ps1 -Python .ve
 and register that script in Task Scheduler ("At log on") so monitoring survives reboots.
 
 > **Windows tip:** if `pip install` fails with a long-path error, create the virtualenv in a short
-> path such as `C:\Users\<you>\.venvs\travel-edge`.
+> path such as `C:\Users\<you>\.venvs\hubfare`.
 
 ### CLI
 
@@ -120,13 +122,13 @@ docker compose up -d --build
 
 `api` serves the dashboard on port 8000, `worker` runs the scheduler, both share the `data` volume
 (SQLite in WAL mode). For PostgreSQL run `docker compose --profile postgres up -d` and set
-`DATABASE_URL=postgresql+psycopg://travel:travel@db:5432/travel_edge` in `.env`.
+`DATABASE_URL=postgresql+psycopg://travel:travel@db:5432/hubfare` in `.env`.
 Supabase works the same way — paste its connection string into `DATABASE_URL`.
 
 Put a reverse proxy with HTTPS in front (Caddy: `reverse_proxy localhost:8000`). The dashboard has
 **no authentication** in this MVP — keep it on localhost, a VPN/Tailscale, or behind proxy basic-auth.
 
-**Without Docker:** see `scripts/travel-edge.service` (systemd units for API and worker).
+**Without Docker:** see `scripts/hubfare.service` (systemd units for API and worker).
 
 **PaaS:** any host that runs two long-lived processes (Railway, Fly.io, Render background worker +
 web service). Serverless/cron-only hosts are not suitable for the worker.
@@ -198,7 +200,7 @@ bypasses authentication, CAPTCHAs or bot protection.
   original source and shows when it was last seen and verified.
 * "Error fare" labels are always **suspected**: either the publisher calls it one, or the price is an
   extreme statistical outlier. Airlines may cancel mistaken fares.
-* TravelEdge never books, pays, or stores payment data.
+* HubFare never books, pays, or stores payment data.
 
 ---
 

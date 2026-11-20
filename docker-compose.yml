@@ -1,6 +1,6 @@
 # docker compose up -d                       -> SQLite (simplest, one small VPS)
 # docker compose --profile postgres up -d    -> adds PostgreSQL; set DATABASE_URL in .env to:
-#   postgresql+psycopg://travel:travel@db:5432/travel_edge
+#   postgresql+psycopg://travel:travel@db:5432/hubfare
 services:
   api:
     build: .
@@ -25,7 +25,7 @@ services:
     environment:
       POSTGRES_USER: travel
       POSTGRES_PASSWORD: travel
-      POSTGRES_DB: travel_edge
+      POSTGRES_DB: hubfare
     volumes: ["pg:/var/lib/postgresql/data"]
     restart: unless-stopped
 

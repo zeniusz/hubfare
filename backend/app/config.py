@@ -19,8 +19,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATABASE_URL = env("DATABASE_URL", f"sqlite:///{(DATA_DIR / 'travelradar.db').as_posix()}")
 
 # Wikimedia and some feeds require a descriptive User-Agent with a contact URL (set CONTACT_URL to your repo/site)
-CONTACT_URL = env("CONTACT_URL", "https://github.com/zeniusz/travel-edge")
-USER_AGENT = env("USER_AGENT", f"TravelEdge/1.0 (self-hosted travel deal monitor; {CONTACT_URL}) python-httpx")
+CONTACT_URL = env("CONTACT_URL", "https://github.com/zeniusz/hubfare")
+USER_AGENT = env("USER_AGENT", f"HubFare/1.0 (self-hosted travel deal monitor; {CONTACT_URL}) python-httpx")
 PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", "http://localhost:8000")
 TIMEZONE = env("TIMEZONE", "Europe/Vilnius")
 DIGEST_HOUR = int(env("DIGEST_HOUR", "8"))
@@ -35,6 +35,10 @@ DUFFEL_TOKEN = env("DUFFEL_TOKEN")
 DUFFEL_MAX_CHECKS_PER_DAY = int(env("DUFFEL_MAX_CHECKS_PER_DAY", "10"))  # keep the search-to-book ratio low
 DUFFEL_MIN_SCORE = int(env("DUFFEL_MIN_SCORE", "85"))
 # Flight deals from blogs (TravelFree, Fly4free…) are shown next to fare-API flights; set false to use APIs only
+# separate tickets: minimum time between landing and the next flight (bags re-checked, no protection)
+MIN_CONNECTION_HOURS = float(env("MIN_CONNECTION_HOURS", "3"))
+# deals that only depart from these countries are not shown (comma-separated ISO codes, e.g. "GB,IE")
+EXCLUDED_ORIGIN_COUNTRIES = {c.strip().upper() for c in env("EXCLUDED_ORIGIN_COUNTRIES", "GB").split(",") if c.strip()}
 RSS_FLIGHTS = env("RSS_FLIGHTS", "true").lower() in ("1", "true", "yes")
 
 # Notifications (each channel is enabled only when its credentials are present)

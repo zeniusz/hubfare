@@ -130,6 +130,9 @@ class Offer(Base):
     live_price_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
     live_detail: Mapped[str] = mapped_column(String(200), default="")
     live_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # exact times from fare APIs (ISO with UTC offset) – used to build same-day connections
+    depart_at: Mapped[str] = mapped_column(String(30), default="")        # main flight leaves the departure airport
+    back_arrive_at: Mapped[str] = mapped_column(String(30), default="")   # return flight lands back there
 
 
 class PriceHistory(Base):
@@ -219,6 +222,8 @@ class PositioningFare(Base):
     depart_date: Mapped[str] = mapped_column(String(10), default="")
     return_date: Mapped[str] = mapped_column(String(10), default="")
     fetched_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    hotel_nights: Mapped[int] = mapped_column(Integer, default=1)  # 0 = same-day connections both ways
+    detail: Mapped[str] = mapped_column(String(240), default="")
 
 
 class GeoCache(Base):
@@ -263,12 +268,17 @@ def init_db() -> None:
     Base.metadata.create_all(engine)
     # add columns introduced after the first release to existing databases
     from sqlalchemy import inspect, text
-    have = {c["name"] for c in inspect(engine).get_columns("offers")}
+    insp = inspect(engine)
     with engine.begin() as conn:
-        for col in Offer.__table__.columns:
-            if col.name not in have:
+        for table in Base.metadata.sorted_tables:
+            have = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in have:
+                    continue
                 default = col.default.arg if col.default is not None and not callable(col.default.arg) else None
-                ddl = f"ALTER TABLE offers ADD COLUMN {col.name} {col.type.compile(engine.dialect)}"
-                if isinstance(default, str):
+                ddl = f"ALTER TABLE {table.name} ADD COLUMN {col.name} {col.type.compile(engine.dialect)}"
+                if isinstance(default, bool):
+                    ddl += f" DEFAULT {'TRUE' if default else 'FALSE'}" if not _is_sqlite else f" DEFAULT {int(default)}"
+                elif isinstance(default, str):
                     ddl += f" DEFAULT '{default}'"
                 conn.execute(text(ddl))

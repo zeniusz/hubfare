@@ -1,4 +1,4 @@
-"""TravelEdge API + dashboard host.   uvicorn app.main:app --port 8000   (from backend/)"""
+"""HubFare API + dashboard host.   uvicorn app.main:app --port 8000   (from backend/)"""
 from __future__ import annotations
 
 import threading
@@ -12,13 +12,13 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from . import notify, scanner
-from .config import ROOT
+from .config import EXCLUDED_ORIGIN_COUNTRIES, ROOT
 from .db import (AlertRule, Airport, Notification, Offer, PriceHistory, Provider, ScanLog, Setting, WatchItem,
                  init_db, session_scope, utcnow)
 from .geo import COUNTRY_ORIGINS, REGIONS
 from .providers import PROVIDER_BY_KEY, UNAVAILABLE_SOURCES
 
-app = FastAPI(title="TravelEdge", version="1.0")
+app = FastAPI(title="HubFare", version="1.0")
 FRONTEND = ROOT / "frontend"
 
 
@@ -68,6 +68,29 @@ def _urgency(o: Offer) -> dict:
     if age_h > window_h * 0.6:
         return {"level": "medium", "label": f"Published {int(age_h // 24)} days ago – check availability"}
     return {"level": "low", "label": ""}
+
+
+def _from_airport(s, o: Offer, d: dict, code: str) -> dict | None:
+    """Re-price a deal as a trip starting at the airport the user picked (train/bus or connecting flight added).
+    Deals with an unknown departure airport are skipped, except cruises (their flights are priced to the port)."""
+    from . import positioning
+    from .scanner import effective_price
+    if o.origin_code == "EU*" and o.subtype != "cruise":
+        return None
+    b = o.score_breakdown or {}
+    pos = positioning.plan(s, o.origin_code, o.origin_codes, REGIONS.get(o.dest_region, {}).get("long_haul", False),
+                           o.depart_date or "", o.return_date or "", homes=[code])
+    if o.subtype == "cruise":
+        base = (b.get("trip_cost") or {}).get("total_pp") or o.price_eur
+        extra = pos["price"] if pos and (b.get("trip_cost") or {}).get("kind") == "fly_cruise_package" else 0
+    else:
+        base = effective_price(o)
+        extra = (pos["price"] if pos else 0) * (2 if o.price_basis == "total" else 1)
+    d = dict(d)
+    d["positioning"] = pos
+    d["home_total"] = round(base + extra) if extra else None
+    d["picked_airport"] = code
+    return d
 
 
 def _cruise_split(tc: dict | None) -> dict | None:
@@ -209,10 +232,24 @@ def overview():
         }
 
 
+@app.get("/api/airports")
+def airports_for_picker():
+    """Departure airports for the 'From' picker: home hubs first, then other watched airports."""
+    from . import positioning
+    with session_scope() as s:
+        homes, _ = positioning.home_settings(s)
+        rows = s.query(Airport).order_by(Airport.priority, Airport.city).all()
+        out = [{"iata": a.iata, "city": a.city, "country": a.country, "enabled": a.enabled, "home": a.iata in homes}
+               for a in rows if a.country not in EXCLUDED_ORIGIN_COUNTRIES]
+        out.sort(key=lambda a: (not a["home"], homes.index(a["iata"]) if a["home"] else 0, a["city"]))
+        return {"airports": out}
+
+
 @app.get("/api/offers")
 def offers(category: str | None = None, error: bool = False, last_minute: bool = False, origin: str | None = None,
            region: str | None = None, cabin: str | None = None, min_score: int | None = None, max_price: float | None = None,
-           relevant: bool = False, sort: str = "score", trip_kind: str | None = None, limit: int = 120):
+           relevant: bool = False, sort: str = "score", trip_kind: str | None = None, limit: int = 120,
+           from_airport: str | None = None):
     with session_scope() as s:
         my_codes, my_cc, saved = _ctx(s)
         q, prefs = _visible(s)
@@ -242,7 +279,13 @@ def offers(category: str | None = None, error: bool = False, last_minute: bool =
                 continue
             if trip_kind and d["trip_kind"] != trip_kind:
                 continue
+            if from_airport:
+                d = _from_airport(s, o, d, from_airport.upper())
+                if d is None:
+                    continue
             out.append(d)
+        if from_airport and sort == "price":
+            out.sort(key=lambda x: x["home_total"] or x["price"])
         return {"items": out[:limit], "count": len(out)}
 
 

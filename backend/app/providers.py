@@ -66,8 +66,8 @@ PROVIDERS: list[ProviderDef] = [
                 "PL*", 120, notes="Polish package holidays and flash sales", focus=["package"]),
     ProviderDef("urlaubspiraten", "Urlaubspiraten", "rss", "https://www.urlaubspiraten.de/feed", "https://www.urlaubspiraten.de",
                 "DE*", 120, notes="German/Austrian package holidays and cruises", focus=["package", "cruise"]),
-    ProviderDef("holidaypirates", "HolidayPirates", "rss", "https://www.holidaypirates.com/feed", "https://www.holidaypirates.com",
-                "GB*", 120, notes="UK-market packages and cruises (prices converted from GBP)", focus=["package", "cruise"]),
+    ProviderDef("holidaypirates", "HolidayPirates (UK – off: UK departures only)", "rss", "https://www.holidaypirates.com/feed",
+                "https://www.holidaypirates.com", "GB*", 120, notes="UK-market packages and cruises (prices converted from GBP)", focus=["package", "cruise"]),
     ProviderDef("makalius", "Makalius", "rss", "https://www.makalius.lt/feed/", "https://www.makalius.lt",
                 "LT*", 120, notes="Lithuanian tour operator – packages from Vilnius/Kaunas", focus=["package", "cruise"]),
     ProviderDef("travelpayouts", "Aviasales Data API (Travelpayouts)", "api",
@@ -76,7 +76,17 @@ PROVIDERS: list[ProviderDef] = [
                 notes="Cheapest fares found by Aviasales users in the last 48h, per departure airport, to any destination. "
                       "Free with a Travelpayouts partner account.", focus=["flight"]),
 ]
+PROVIDERS.append(ProviderDef(
+    "tp_calendar", "Aviasales whole-month fares (Travelpayouts)", "api",
+    "https://api.travelpayouts.com/aviasales/v3/grouped_prices", "https://www.travelpayouts.com",
+    "EU*", 180, True, requires="TRAVELPAYOUTS_TOKEN",
+    notes="Whole-month price calendars from your home hubs to long-haul destinations – the cheapest day of each "
+          "month, like browsing Skyscanner's month view. No dates needed.", focus=["flight"]))
 PROVIDER_BY_KEY = {p.key: p for p in PROVIDERS}
+
+# long-haul destinations where exceptional fares appear most often (rotated, a few per run)
+CALENDAR_TARGETS = ["BKK", "HKT", "DPS", "SIN", "SHA", "HKG", "TYO", "DEL", "CMB", "MLE", "MRU", "SEZ", "DXB",
+                    "NYC", "MIA", "LAX", "CUN", "PUJ", "HAV", "RIO", "CPT", "ZNZ", "NBO", "SYD"]
 
 # Researched, but not integrated – shown in Settings for transparency.
 UNAVAILABLE_SOURCES = [
@@ -151,6 +161,66 @@ def fetch_rss(p: ProviderDef) -> tuple[list[RawItem], int]:
     return items, 1
 
 
+def _arrival(departure_at: str | None, minutes) -> str:
+    """Landing time = departure (with its UTC offset) + flight duration; '' when unknown."""
+    if not departure_at or not minutes:
+        return ""
+    try:
+        from datetime import timedelta as _td
+        return (datetime.fromisoformat(departure_at) + _td(minutes=int(minutes))).isoformat()
+    except (ValueError, TypeError):
+        return ""
+
+
+def fetch_travelpayouts_calendar(p: ProviderDef, hubs: list[str], targets: list[str],
+                                 months: list[str]) -> tuple[list[RawItem], int]:
+    """Cheapest day per month for hub → destination (return trips), via the grouped-prices calendar."""
+    if not TRAVELPAYOUTS_TOKEN:
+        raise LookupError("needs_credentials")
+    from .geo import IATA_TO_DEST
+    items: list[RawItem] = []
+    calls = 0
+    with _client() as c:
+        for origin in hubs:
+            for dst in targets:
+                dest = IATA_TO_DEST.get(dst)
+                if not dest:
+                    continue
+                for month in months:
+                    r = c.get(p.url, params={"origin": origin, "destination": dst, "departure_at": month,
+                                             "group_by": "departure_at", "currency": "eur"},
+                              headers={"X-Access-Token": TRAVELPAYOUTS_TOKEN})
+                    calls += 1
+                    if r.status_code == 429:
+                        time.sleep(5)
+                        continue
+                    if r.status_code >= 400:
+                        continue
+                    days = (r.json() or {}).get("data") or {}
+                    offers = [t for t in (days.values() if isinstance(days, dict) else days) if t.get("price")]
+                    if not offers:
+                        continue
+                    t = min(offers, key=lambda x: float(x["price"]))  # cheapest day of the month
+                    dep, ret = (t.get("departure_at") or "")[:10], (t.get("return_at") or "")[:10]
+                    link = "https://www.aviasales.com" + (t.get("link") or f"/search/{origin}{dep[8:10]}{dep[5:7]}{dst}1")
+                    if TRAVELPAYOUTS_MARKER:
+                        link += ("&" if "?" in link else "?") + f"marker={TRAVELPAYOUTS_MARKER}"
+                    ext = hashlib.sha1(f"cal{origin}{dst}{dep}{ret}".encode()).hexdigest()
+                    items.append(RawItem(
+                        p.key, ext, link,
+                        f"{origin} → {dest.name}: €{float(t['price']):.0f} return – cheapest day in {month}",
+                        f"{t.get('transfers', 0)} stop(s) out, {t.get('return_transfers', 0)} back",
+                        None, "", origin,
+                        structured={"origin": origin, "dest_key": dest.key, "price": float(t["price"]), "currency": "EUR",
+                                    "depart_date": dep, "return_date": ret, "airline": t.get("airline", ""),
+                                    "transfers": t.get("transfers", 0), "dest_iata": dst,
+                                    "depart_at": t.get("departure_at") or "",
+                                    "back_arrive_at": _arrival(t.get("return_at"), t.get("duration_back"))},
+                    ))
+                    time.sleep(0.3)
+    return items, calls
+
+
 def fetch_travelpayouts(p: ProviderDef, origins: list[str]) -> tuple[list[RawItem], int]:
     if not TRAVELPAYOUTS_TOKEN:
         raise LookupError("needs_credentials")
@@ -183,6 +253,8 @@ def fetch_travelpayouts(p: ProviderDef, origins: list[str]) -> tuple[list[RawIte
                     None, "", origin,
                     structured={"origin": origin, "dest_key": dest.key, "price": float(t["price"]), "currency": "EUR",
                                 "depart_date": dep, "return_date": ret, "airline": t.get("airline", ""), "dest_iata": t.get("destination", ""),
+                                "depart_at": t.get("departure_at") or "",
+                                "back_arrive_at": _arrival(t.get("return_at"), t.get("duration_back")),
                                 "transfers": t.get("transfers", 0)},
                 ))
             time.sleep(0.4)  # stay far below the documented rate limit

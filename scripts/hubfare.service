@@ -1,0 +1,18 @@
+# systemd units for a Linux VPS without Docker. Copy twice (api + worker), adjust paths/user, then:
+#   sudo systemctl enable --now hubfare-api hubfare-worker
+[Unit]
+Description=HubFare worker (background deal scanner)
+After=network-online.target
+
+[Service]
+User=travel
+WorkingDirectory=/opt/hubfare/backend
+EnvironmentFile=/opt/hubfare/.env
+ExecStart=/opt/hubfare/.venv/bin/python -m app.worker
+# For the API unit use instead:
+# ExecStart=/opt/hubfare/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
