@@ -120,6 +120,7 @@ function routeLine(d) {
   const pos = d.positioning, dest = `${esc(d.dest)}${d.dest_country && d.dest_country !== d.dest ? ", " + esc(d.dest_country) : ""}`;
   if (pos && pos.mode === "flight") return `<span class="hub">${esc(pos.hub_name)}</span> ✈ ${esc(d.origin_label)} → ${dest}`;
   if (pos && pos.mode === "nearby") return `<span class="hub">${esc(pos.hub_name)}</span> 🚆 ${esc(d.origin_label)} → ${dest}`;
+  if (d.origin === "EU*" && d.subtype === "cruise") return `${dest} <span class="muted">· flights to the port from your hub included</span>`;
   if (d.origin === "EU*") return `${dest} <span class="muted">· departure airport not specified</span>`;
   return `${esc(d.origin_label)} → ${dest}`;
 }
@@ -131,7 +132,9 @@ function dealCard(d, compact = false) {
   const pos = d.positioning;
   const main = total(d);
   const mainLabel = d.home_total ? `total from ${esc(pos.hub_name)}` : d.subtype === "cruise" ? "complete trip pp" : basisLabel(d);
-  const ref = d.subtype === "cruise" ? `Cruise fare ${eur(d.price)} · typical trip ${eur(d.reference)}` :
+  const sp = d.trip_split;
+  const ref = d.subtype === "cruise" && sp ? `Cruise ${eur(sp.fare)} + ${sp.flights_included ? "flights included" : `flights ${eur(sp.flights)}`} + fees ${eur(sp.extras)}${d.home_total && pos && pos.price ? ` + ${pos.estimated ? "≈" : ""}${eur(pos.price)} to ${esc(pos.gateway_name || "the departure airport")}` : ""} · typical ${eur(d.reference)}` :
+    d.subtype === "cruise" ? `Cruise fare ${eur(d.price)} · typical trip ${eur(d.reference)}` :
     d.price_for_two && !d.home_total ? `${eur(d.price_for_two)} for 2 · typical ${eur(d.reference)}` : `typical ${eur(d.reference)}`;
   return `<article class="panel deal" data-id="${d.id}" tabindex="0">
     <div class="ph" ${bg(d.image)}><div class="tags">${tags(d)}</div><div class="dest">${esc(d.dest)}</div></div>
@@ -140,7 +143,7 @@ function dealCard(d, compact = false) {
       ${compact ? "" : facts(d)}
       <div class="row">
         <div><div class="price num">${eur(main)}<small>${mainLabel}</small></div>
-        <div class="ref">${d.home_total && pos && pos.price ? `${eur(main - pos.price * (d.price_basis === "total" ? 2 : 1))} deal + ${pos.estimated ? "≈" : ""}${eur(pos.price)} ${pos.mode === "nearby" ? "train/bus" : pos.hotel ? "flight + hotel night" : "flight"} · ` : ""}${ref}${d.savings > 0 ? ` · <b>save ${eur(d.savings)}</b>` : ""}</div></div>
+        <div class="ref">${d.home_total && pos && pos.price && d.subtype !== "cruise" ? `${eur(main - pos.price * (d.price_basis === "total" ? 2 : 1))} deal + ${pos.estimated ? "≈" : ""}${eur(pos.price)} ${pos.mode === "nearby" ? "train/bus" : pos.hotel ? "flight + hotel night" : "flight"} · ` : ""}${ref}${d.savings > 0 ? ` · <b>save ${eur(d.savings)}</b>` : ""}</div></div>
         ${scoreBadge(d.score)}
       </div>
       ${compact ? "" : `<div class="foot"><span>${esc(d.provider_name)}</span><span>${d.urgency.level === "high" ? `<span style="color:var(--urgent)">${esc(d.urgency.label)}</span>` : "seen " + ago(d.last_seen_at)}</span></div>`}

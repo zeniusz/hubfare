@@ -227,15 +227,18 @@ def parse_deal(title: str, summary: str, default_origin: str = "EU*") -> ParsedD
         confidence -= 0.1
         notes.append("departure airport inferred from source market")
 
-    # Non-European origin (e.g. "Bangkok to Oslo") -> not relevant, unless a European origin exists
+    # Non-European origin (e.g. "Bangkok to Oslo") -> not relevant, unless a European origin exists.
+    # Cruises are exempt: "from Miami" names the embarkation port, and flights there are added to the trip cost.
+    cruise_title = bool(_CRUISE.search(title_c))
     m_from = _FROM_TO.search(title_c)
-    if m_from and not _find_origins(m_from.group(2)) and (find_places(m_from.group(2), "dest") or _NON_EU.search(m_from.group(2))):
+    if not cruise_title and m_from and not _find_origins(m_from.group(2)) and (
+            find_places(m_from.group(2), "dest") or _NON_EU.search(m_from.group(2))):
         return None
-    if re.search(r"\b(from|von|ab|z|iš|da)\s+(l\.a\.|los angeles|new york|bangkok|dubai|singapore|tokyo|miami|sydney)",
-                 title_c, re.I):
+    if not cruise_title and re.search(r"\b(from|von|ab|z|iš|da)\s+(l\.a\.|los angeles|new york|bangkok|dubai|singapore|tokyo|miami|sydney)",
+                                      title_c, re.I):
         return None
     # "Loty z Tajlandii do Europy", "Flights from Hanoi, Vietnam to Barcelona": departs outside Europe
-    for m in re.finditer(r"\b(from|von|ab|z|ze|iš|da)\s+([^\s,.;:!()]+(?:\s+[^\s,.;:!()]+)?)", title_c, re.I):
+    for m in ([] if cruise_title else re.finditer(r"\b(from|von|ab|z|ze|iš|da)\s+([^\s,.;:!()]+(?:\s+[^\s,.;:!()]+)?)", title_c, re.I)):
         seg = m.group(2)
         hits = find_places(seg, "dest")
         if hits and REGIONS[hits[0][2].region]["long_haul"] and not _find_origins(seg):

@@ -70,6 +70,17 @@ def _urgency(o: Offer) -> dict:
     return {"level": "low", "label": ""}
 
 
+def _cruise_split(tc: dict | None) -> dict | None:
+    if not tc:
+        return None
+    parts = tc.get("parts", [])
+    fare = sum(p["eur"] for p in parts if p["label"].startswith("Cruise fare"))
+    flights = sum(p["eur"] for p in parts if "flight" in p["label"].lower() and not p["label"].startswith("Cruise fare"))
+    return {"fare": round(fare), "flights": round(flights), "extras": round(tc["total_pp"] - fare - flights),
+            "flights_included": tc.get("kind") == "fly_cruise_package",
+            "port": tc.get("port"), "end_port": tc.get("end_port")}
+
+
 def _home_total(o: Offer, b: dict) -> int | None:
     """The one price every view uses: live/advertised price + getting there from your hub (+ cruise extras).
     None when it equals the advertised price, so the UI shows the plain price."""
@@ -93,6 +104,8 @@ def ser(o: Offer, my_codes=frozenset(), my_cc=frozenset(), saved=frozenset(), fu
         "price_for_two": round(o.price_eur * 2) if o.price_basis == "per_person" and o.subtype != "flight" else None,
         "trip_total": round(b["trip_cost"]["total_pp"]) if b.get("trip_cost") else None,
         "trip_kind": b.get("trip_cost", {}).get("kind"),
+        # cruise cost split: fare / flights to and from the port / fees + transfers + hotel
+        "trip_split": _cruise_split(b.get("trip_cost")),
         "reference": round(o.reference_price), "savings": round(o.savings_eur), "discount": o.discount_pct,
         "score": o.deal_score, "band": b.get("band", ""), "error_flag": o.error_fare_flag,
         "last_minute": bool(b.get("last_minute")), "trip_type": o.trip_type, "cabin": o.cabin, "nights": o.nights,

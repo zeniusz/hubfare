@@ -143,6 +143,8 @@ DESTINATIONS: list[tuple] = [
     ("hawaii", "Hawaii", "United States", "na_west", 21.31, -157.86, "HNL", ["hawaii", "hawaj*", "honolulu"]),
     # Caribbean & Mexico
     ("cancun", "Cancun", "Mexico", "caribbean", 21.16, -86.85, "CUN", ["cancun", "cancún", "mexico", "meksyk*", "mexiko", "meksik*", "messico", "riviera maya", "playa del carmen", "mexico city"]),
+    ("bahamas", "Bahamas", "Bahamas", "caribbean", 25.05, -77.35, "NAS", ["bahamas", "bahamy", "bahamach", "nassau", "cococay", "bahamų"]),
+    ("cozumel", "Cozumel & Mexican Riviera", "Mexico", "caribbean", 20.42, -86.92, "CZM", ["cozumel", "mexican riviera", "ensenada", "cabo san lucas", "puerto vallarta"]),
     ("havana", "Cuba", "Cuba", "caribbean", 23.11, -82.37, "HAV", ["cuba", "kub*", "havana", "hawan*", "varadero"]),
     ("puntacana", "Dominican Republic", "Dominican Republic", "caribbean", 18.58, -68.40, "PUJ", ["dominican republic", "dominikan*", "dominikanische republik", "punta cana", "santo domingo", "repubblica dominicana"]),
     ("jamaica", "Jamaica", "Jamaica", "caribbean", 18.11, -77.30, "MBJ", ["jamaica", "jamajk*", "jamaika"]),

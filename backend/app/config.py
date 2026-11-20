@@ -34,8 +34,8 @@ TRAVELPAYOUTS_MAX_AIRPORTS = int(env("TRAVELPAYOUTS_MAX_AIRPORTS", "12"))
 DUFFEL_TOKEN = env("DUFFEL_TOKEN")
 DUFFEL_MAX_CHECKS_PER_DAY = int(env("DUFFEL_MAX_CHECKS_PER_DAY", "10"))  # keep the search-to-book ratio low
 DUFFEL_MIN_SCORE = int(env("DUFFEL_MIN_SCORE", "85"))
-# Flights come from fare APIs only; set to true to also accept flight posts from deal blogs (RSS)
-RSS_FLIGHTS = env("RSS_FLIGHTS", "false").lower() in ("1", "true", "yes")
+# Flight deals from blogs (TravelFree, Fly4free…) are shown next to fare-API flights; set false to use APIs only
+RSS_FLIGHTS = env("RSS_FLIGHTS", "true").lower() in ("1", "true", "yes")
 
 # Notifications (each channel is enabled only when its credentials are present)
 TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN")

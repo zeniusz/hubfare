@@ -222,3 +222,10 @@ def test_positioning_uses_fare_matched_to_deal_dates():
             row = s.get(PositioningFare, key)
             if row:
                 s.delete(row)
+
+
+def test_worldwide_cruises_are_kept_but_foreign_flights_are_not():
+    from app.parsing import parse_deal
+    d = parse_deal("7-night Bahamas cruise from Miami for $299", "", "EU*")
+    assert d is not None and d.subtype == "cruise" and d.dest.key == "bahamas" and d.cruise_port.key == "miami"
+    assert parse_deal("Flights from Bangkok to Oslo for €300", "", "EU*") is None

@@ -227,7 +227,7 @@ def process_new_offers(offer_ids: list[int]) -> int:
         for o in offers:
             if o.live_status == "unavailable":
                 continue  # no matching live offer found
-            if o.subtype == "flight" and C.DUFFEL_TOKEN and o.live_status != "confirmed":
+            if o.subtype == "flight" and o.dest_iata and C.DUFFEL_TOKEN and o.live_status != "confirmed":
                 continue  # with live checks on, flights are alerted only once the airline price is confirmed
             for r in rules:
                 if not rule_matches(r, o):

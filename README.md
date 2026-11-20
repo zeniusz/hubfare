@@ -8,7 +8,7 @@ and surfaces only the genuinely exceptional ones in three categories:
 |---|---|
 | **Flights** | Suspected error fares, extraordinary long-haul discounts, cheap premium cabins, last-minute fares |
 | **Holiday Packages** | Flights **+** accommodation only (stand-alone hotels and coach tours are rejected) |
-| **Cruises + Flights** | Ranked on the **complete trip cost** — cruise fare + flights to the port + gratuities + transfers + pre-cruise night. Protected fly-&-cruise packages are distinguished from independent combinations |
+| **Cruises + Flights** | Worldwide (Mediterranean, Northern Europe, Caribbean/Bahamas, USA, Asia…). Ranked on the **complete trip cost** — cruise fare + flights to the port + gratuities + transfers + pre-cruise night. Protected fly-&-cruise packages are distinguished from independent combinations |
 
 Error fares and last-minute offers are **filters** across categories, not separate pages.
 Nothing is ever booked or purchased automatically.
@@ -48,7 +48,7 @@ Preferences → Automated scanning → Parse & normalise (EUR) → De-duplicate 
 | In-app + browser notifications | ✅ Working without setup |
 | Telegram, Email (SMTP), ntfy mobile push, webhook | 🔑 Implemented, **needs your credentials** in `.env` (not tested end-to-end here) |
 | WhatsApp (Meta Cloud API), Facebook Messenger | 🔑 Implemented against the official APIs, **needs an approved Business/Page app** |
-| **Flights:** Aviasales Data API via Travelpayouts — real fares per departure airport, any destination, with dates. Deal blogs are no longer used for flights (`RSS_FLIGHTS=false`) | 🔑 Implemented, **needs a free `TRAVELPAYOUTS_TOKEN`** — not tested without a token |
+| **Flights:** Aviasales Data API via Travelpayouts — real fares per departure airport, any destination, with dates. Flight posts from deal blogs (TravelFree.info, Fly4free…) are shown too (`RSS_FLIGHTS=true`) | 🔑 Implemented, **needs a free `TRAVELPAYOUTS_TOKEN`** — not tested without a token |
 | **Live airline price check:** Duffel API re-searches the best flight deals (score ≥ 75) with the airlines before alerting; cards show "Live price confirmed" / "Now €X" / "No seats". Alerts skip deals the airline no longer sells at that price. A fresh live price **replaces** the cached one and the deal is re-scored. Defaults: 10 checks/day, score ≥ 85. Duffel is built for booking apps; confirm with Duffel that a search-only monitor is acceptable before using a live token | 🔑 Implemented, **needs `DUFFEL_TOKEN`** — parsing unit-tested, not tested against the live API |
 | Tour-operator feeds (Novaturas, Tez Tour, Join UP!, TUI, ITAKA, Rainbow, …) | ⛔ No public API/feed; needs affiliate/partner agreements (see `docs/SOURCES.md`) |
 | Demo data | **None.** Everything in the database comes from live sources |

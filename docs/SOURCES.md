@@ -26,8 +26,8 @@ The worker re-checks `robots.txt` daily and stops if a feed becomes disallowed.
 
 | Duffel `air/offer_requests` | Self sign-up, pay-as-you-go | Live airline prices for the exact route and dates of the top flight deals. Searches beyond a 1,500:1 search-to-book ratio cost ≈ $0.005 each; capped by `DUFFEL_MAX_CHECKS_PER_DAY` |
 
-Since 17 Nov 2026 flight deals come only from these APIs; deal-blog posts are used for holiday packages and cruises only
-(TravelFree.info, which is flights-only, is disabled). Set `RSS_FLIGHTS=true` to bring blog flight posts back.
+Flight deals come from both: the fare APIs above and flight posts from the deal blogs (TravelFree.info, Fly4free,
+Travel-Dealz…). Blog fares are priced from your home hub like everything else. Set `RSS_FLIGHTS=false` to use the APIs only.
 
 ## Researched – not integrated
 
