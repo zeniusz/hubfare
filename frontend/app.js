@@ -78,15 +78,11 @@ function renderNav(active) {
 function renderMonitoring(m, airports) {
   if (!m) return;
   const cls = m.state === "ok" ? "" : m.state === "degraded" ? "warn" : "off";
-  const label = m.state === "ok" ? "Monitoring live" : m.state === "degraded" ? "Monitoring – source issues" : "Worker stopped";
-  $("#live-status").innerHTML = `<span class="pulse ${cls}"></span><span class="txt">${label}</span>
-    <span class="muted txt txt-long">· ${m.sources_active}/${m.sources_total} sources · ${ago(m.last_scan)}</span>`;
+  const label = m.state === "off" || !m.worker_running ? "Paused" : "Live";
+  $("#live-status").innerHTML = `<span class="pulse ${cls}"></span><span class="txt">${label}</span>`;
   $("#live-status").title = `Worker heartbeat: ${ago(m.worker_heartbeat)}\nLast successful scan: ${ago(m.last_scan)}\nNext scan: ${until(m.next_scan)}${
     m.sources_failing.length ? "\nFailing: " + m.sources_failing.join(", ") : ""}`;
-  $("#sidebar-status").innerHTML = `<div style="display:flex;align-items:center;gap:8px;font-weight:600"><span class="pulse ${cls}"></span>${label}</div>
-    <div class="row"><span>Last scan</span><b>${ago(m.last_scan)}</b></div>
-    <div class="row"><span>Next scan</span><b>${until(m.next_scan)}</b></div>
-    <div class="row"><span>Sources</span><b>${m.sources_active}/${m.sources_total} OK</b></div>`;
+  $("#sidebar-status").innerHTML = "";
   if (airports) {
     const a = airports.slice(0, 4).join(" · ");
     $("#pref-chip").innerHTML = `${ic("pin")}<span>From ${a}${airports.length > 4 ? ` +${airports.length - 4}` : ""}</span>`;
@@ -215,21 +211,10 @@ async function viewOverview(v) {
     </div>
     <div class="section-head"><h2>Latest exceptional deals</h2><span class="muted" style="font-size:12.5px">${o.relevant_count} of ${o.total_count} active deals depart from your airports or markets</span></div>
     ${latest}
-    <div class="section-head"><h2>Price drops &amp; system status</h2><a class="link" href="#/settings">Sources</a></div>
-    <div class="ov-bottom">
-      <div class="panel side-list"><div class="head"><h3>Recent price drops</h3></div>${drops}</div>
-      <div class="panel side-list"><div class="head"><h3>Monitoring</h3><span class="status ${m.state === "ok" ? "ok" : "failing"}">${m.state === "ok" ? "Operational" : m.state}</span></div>
-        <div class="mon-grid">
-          <div><div class="k">Worker</div><div class="v">${m.worker_running ? "Running" : "Stopped"}</div></div>
-          <div><div class="k">Last scan</div><div class="v">${ago(m.last_scan)}</div></div>
-          <div><div class="k">Next scan</div><div class="v">${until(m.next_scan)}</div></div>
-          <div><div class="k">Healthy sources</div><div class="v">${m.sources_active}/${m.sources_total}</div></div>
-          <div><div class="k">Showing</div><div class="v">Score ≥ ${o.min_display_score}</div></div>
-          <div><div class="k">Alerts unread</div><div class="v">${o.unread}</div></div>
-        </div>
-        ${m.sources_failing.length ? `<div class="notice err" style="margin:0 14px 14px">Failing: ${esc(m.sources_failing.join(", "))}</div>` : ""}
-        ${!m.worker_running ? `<div class="notice warn" style="margin:0 14px 14px">The background worker is not running, so no new scans are happening. Start it with <code>python -m app.worker</code> (see README).</div>` : ""}
-      </div>
+    <div class="section-head"><h2>Recent price drops</h2></div>
+    <div>
+      <div class="panel side-list">${drops}</div>
+      ${!m.worker_running ? `<div class="notice warn" style="margin-top:12px">New deals are paused – the scanner isn't running. See Settings → Monitoring status.</div>` : ""}
     </div>`;
   bindCards(v);
 }
@@ -314,7 +299,9 @@ async function openDeal(id) {
       <div class="breakdown">${tc.parts.map((p) => `<div class="line"><span>${esc(p.label)} <span class="muted">· ${esc(p.source)}</span></span><span class="num">${eur(p.eur)}</span></div>`).join("")}
       <div class="line"><b>Estimated complete trip</b><b class="num">${eur(tc.total_pp)}</b></div></div></div>` : "";
   const mods = (b.modifiers || []).map((m) => `<div class="line"><span>${esc(m.label)}</span><span class="${m.points >= 0 ? "pos" : "neg"}">${m.points >= 0 ? "+" : ""}${m.points}</span></div>`).join("");
-  const basis = d.price_basis === "total" ? "Total for 2 travellers" : d.subtype === "flight" ? "Per person" : `Per person · ${eur(d.price_for_two)} for 2`;
+  const basis = d.home_total && d.positioning
+    ? `From ${esc(d.positioning.hub_name)}: ${eur(d.subtype === "cruise" && d.trip_total ? d.trip_total : d.price)} deal + ${d.positioning.estimated ? "≈" : ""}${eur(d.positioning.price)} getting there`
+    : d.price_basis === "total" ? "Total for 2 travellers" : d.subtype === "flight" ? "Per person" : `Per person · ${eur(d.price_for_two)} for 2`;
   dr.innerHTML = `
     <div class="hero" ${bg(d.image)}><button class="icon-btn close" id="dr-close" aria-label="Close">${ic("x")}</button>
       <div class="h"><div style="display:flex;gap:6px;flex-wrap:wrap">${tags(d)}</div><h2>${esc(d.dest)}</h2>

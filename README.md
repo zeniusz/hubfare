@@ -13,6 +13,16 @@ and surfaces only the genuinely exceptional ones in three categories:
 Error fares and last-minute offers are **filters** across categories, not separate pages.
 Nothing is ever booked or purchased automatically.
 
+![Overview – best opportunity, deals that may disappear soon and the latest exceptional deals](docs/screenshots/overview.jpg)
+
+| Holiday packages, priced from your home airport | Cruises in the compact list view |
+|---|---|
+| ![Holiday packages](docs/screenshots/holiday-packages.jpg) | ![Cruises list](docs/screenshots/cruises-list.jpg) |
+
+![Deal details – complete price from your hub and a transparent score breakdown](docs/screenshots/deal-details.jpg)
+
+<sub>Screenshots show real offers found on 20 Nov 2026; destination photos come from the deal sources and Wikimedia Commons.</sub>
+
 ```
 Preferences → Automated scanning → Parse & normalise (EUR) → De-duplicate → Price history
             → Deal Score (0-100) → Verification → Dashboard + instant alerts / daily digest

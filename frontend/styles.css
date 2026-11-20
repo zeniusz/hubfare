@@ -393,3 +393,6 @@ pre.body { white-space: pre-wrap; font: 12.5px/1.5 var(--sans); color: var(--tex
   .lrow { grid-template-columns: 1fr auto auto; }
   .lrow > :nth-child(2), .lrow > :nth-child(3), .lrow > :nth-child(5) { display: none; }
 }
+
+/* system details live in Settings, not on the main screens */
+.sidebar-foot:empty { display: none; }
