@@ -92,8 +92,26 @@ cd backend && ../.venv/bin/python -m app.worker
 
 Open http://localhost:8000.
 
-On Windows you can start both hidden with `scripts\start-windows.ps1 -Python .venv\Scripts\python.exe`
-and register that script in Task Scheduler ("At log on") so monitoring survives reboots.
+### Always on (Windows)
+
+One command sets everything up. It creates `.venv`, installs dependencies, and registers a **HubFare** task
+that starts hidden at every log-on. No admin rights are needed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
+```
+
+The task runs `scripts\run-windows.ps1`, a small watchdog that starts the dashboard and the scanner. It checks
+on them every 30 s and restarts whichever one has stopped, for example after a crash or a network error. Logs go
+to `data\runner.log`, `data\api.log` and `data\worker.log`. Remove the task with
+`install-windows.ps1 -Uninstall`.
+
+If Windows **Smart App Control** blocks a DLL in the fresh environment (`An Application Control policy has blocked
+this file`), point the installer at an environment that already works: `install-windows.ps1 -Python
+C:\path\to\venv\Scripts\python.exe`.
+
+Nothing scans while the PC sleeps; missed scans run when it wakes. For 24/7 monitoring, use a small VPS with the
+systemd units in `scripts/hubfare.service`, or Docker.
 
 > **Windows tip:** if `pip install` fails with a long-path error, create the virtualenv in a short
 > path such as `C:\Users\<you>\.venvs\hubfare`.
