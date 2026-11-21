@@ -163,6 +163,10 @@ def _score_offer(s, o: Offer, d: ParsedDeal, enabled_codes: set[str], text: str)
     o.savings_eur = res["savings_eur"]
     o.discount_pct = res["discount_pct"]
     res.update(breakdown_extra)
+    res["shared_price"] = (o.score_breakdown or {}).get("shared_price")
+    if res["shared_price"]:
+        res["modifiers"].append({"label": f"price is the lowest of {res['shared_price']['cities']} cities in the post – "
+                                          "this city may cost more", "points": 0})
     res["effective_total"] = round(price_for_score)
     res["advertised_price"] = round(o.price_eur)
     res["parse_notes"] = d.notes
@@ -191,15 +195,18 @@ def process_items(provider_key: str, items) -> dict:
 def _process(items, provider_key: str, stats: dict, need_images: list) -> None:
     with session_scope() as s:
         enabled_codes = {a.iata for a in s.query(Airport).filter(Airport.enabled).all()}
-        for raw in items:
-            d = _parsed_from_structured(raw) if raw.structured else parse_deal(raw.title, raw.summary, raw.default_origin)
-            if not d or not d.dest:
-                continue
+        groups: dict[str, list[Offer]] = {}
+        for raw, d, n_cities, city_labels in _expanded(items):
             if d.subtype == "flight" and not raw.structured and not RSS_FLIGHTS:
                 continue  # flights come from fare APIs, not deal-blog posts
             stats["parsed"] += 1
             price_eur = to_eur(d.price_amount, d.currency)
-            fp = _fingerprint(provider_key, raw.external_id or raw.url)
+            base_id = raw.external_id or raw.url
+            fp = _fingerprint(provider_key, base_id + (f"|{d.origin_codes[0]}" if n_cities > 1 else ""))
+            if n_cities > 1:  # retire the old single multi-city version of this post
+                old = s.execute(select(Offer).where(Offer.fingerprint == _fingerprint(provider_key, base_id))).scalar_one_or_none()
+                if old and old.status == "active":
+                    old.status = "expired"
             o = s.execute(select(Offer).where(Offer.fingerprint == fp)).scalar_one_or_none()
             now = utcnow()
             origin_code = d.origin_codes[0]
@@ -217,7 +224,8 @@ def _process(items, provider_key: str, stats: dict, need_images: list) -> None:
             text = f"{d.title} {raw.summary[:900]}"
             o.source_url = raw.url[:800]
             if raw.booking_links:
-                o.booking_links = raw.booking_links
+                from .booking import for_origin
+                o.booking_links = for_origin(raw.booking_links, origin_code)
             o.title = d.title[:400]
             o.summary = (raw.summary or "")[:2000]
             o.subtype = d.subtype
@@ -254,7 +262,11 @@ def _process(items, provider_key: str, stats: dict, need_images: list) -> None:
                                    offer_id=o.id, provider_key=provider_key, origin_code=o.origin_code, dest_key=o.dest_key,
                                    category=o.subtype, price_eur=price_eur, observed_at=now,
                                    travel_month=(o.depart_date or "")[:7]))
+            o.score_breakdown = {**(o.score_breakdown or {}),
+                                 "shared_price": {"cities": n_cities, "listed": city_labels} if n_cities > 1 else None}
             _score_offer(s, o, d, enabled_codes, text)
+            if n_cities > 1:
+                groups.setdefault(f"{provider_key}|{base_id}", []).append(o)
             # cross-provider duplicate: same trip, similar price, seen recently from another source
             dup = s.execute(select(Offer).where(Offer.dedupe_key == o.dedupe_key, Offer.id != o.id,
                                                 Offer.status == "active", Offer.duplicate_of.is_(None),
@@ -268,6 +280,14 @@ def _process(items, provider_key: str, stats: dict, need_images: list) -> None:
                 stats["updated"] += 1
                 if o.previous_price_eur and o.price_changed_at == now and price_eur < o.previous_price_eur:
                     stats["dropped_ids"].append(o.id)
+        # one card per post: the city that works best from your hubs leads, the others are listed under it
+        for siblings in groups.values():
+            lead = max(siblings, key=lambda x: (x.deal_score, -trip_total(x)))
+            for x in siblings:
+                if x is not lead:
+                    x.duplicate_of = lead.id
+                    if x.id in stats["new_ids"]:
+                        stats["new_ids"].remove(x.id)
     return stats
 
 
@@ -447,6 +467,30 @@ def backfill_images() -> int:
                 s.get(Offer, oid).image_url = url
             n += 1
     return n
+
+
+def trip_total(o: Offer) -> float:
+    """The single price used for display, sorting, budgets and alerts: the whole trip from your home city."""
+    b = o.score_breakdown or {}
+    return b.get("effective_total") or (b.get("trip_cost") or {}).get("total_pp") or o.price_eur
+
+
+def _expanded(items):
+    """A post listing several departure cities becomes one deal per city (each priced from its own airport).
+    Yields (raw, parsed, cities_in_post, labels)."""
+    from dataclasses import replace
+    for raw in items:
+        d = _parsed_from_structured(raw) if raw.structured else parse_deal(raw.title, raw.summary, raw.default_origin)
+        if not d or not d.dest:
+            continue
+        concrete = [c for c in dict.fromkeys(d.origin_codes) if not c.endswith("*") and c in ORIGIN_PLACES]
+        if raw.structured or len(concrete) < 2:
+            yield raw, d, 1, None
+            continue
+        labels = [ORIGIN_PLACES[c].name for c in concrete]
+        for c in concrete:
+            yield raw, replace(d, origin_codes=[c], origin_label=ORIGIN_PLACES[c].name,
+                               confidence=max(0.3, d.confidence - 0.1)), len(concrete), labels
 
 
 def effective_price(o: Offer) -> float:

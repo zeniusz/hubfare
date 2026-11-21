@@ -13,7 +13,8 @@ import html as _html
 import logging
 import re
 import time
-from urllib.parse import parse_qs, quote, unquote, urlparse
+from html.parser import HTMLParser
+from urllib.parse import parse_qs, parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
 import httpx
 
@@ -65,15 +66,52 @@ def _label_from_skyscanner(url: str) -> str:
     return f"{o.upper()} → {d.upper()}{dates}"
 
 
+class _Anchors(HTMLParser):
+    """Collect (href, text) for every <a> – robust to quoting and attribute order, unlike a regex."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.links: list[tuple[str, str]] = []
+        self._href, self._text = None, []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self._href, self._text = dict(attrs).get("href") or "", []
+
+    def handle_data(self, data):
+        if self._href is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._href is not None:
+            self.links.append((self._href, "".join(self._text)))
+            self._href = None
+
+
+_TRACKING = re.compile(r"^(utm_|associateid|affilid|mediaid|ref$|clickref|irgwc|irclickid|gclid|fbclid)", re.I)
+
+
+def _dedupe_key(url: str) -> str:
+    """Same search = same host, path and query minus tracking params (two different routes never collide)."""
+    p = urlparse(url)
+    q = sorted((k, v) for k, v in parse_qsl(p.query, keep_blank_values=True) if not _TRACKING.match(k))
+    return urlunparse((p.scheme.lower(), p.netloc.lower().removeprefix("www."), p.path.rstrip("/"), "", urlencode(q), ""))
+
+
 def extract_links(html: str, limit: int = 12) -> list[dict]:
     """Booking-search links inside a post, deduplicated, affiliate wrappers removed."""
     out, seen = [], set()
-    for href, text in _A.findall(html or ""):
+    parser = _Anchors()
+    try:
+        parser.feed(html or "")
+    except Exception:  # malformed HTML: keep what was parsed
+        pass
+    for href, text in parser.links:
         url = _unwrap(href)
         site = _site(url)
         if not site:
             continue
-        key = url.split("&")[0] if site != "Google Flights" else url[:160]
+        key = _dedupe_key(url)
         if key in seen:
             continue
         seen.add(key)
@@ -129,9 +167,16 @@ def build_links(origins: list[str], dst: str, dep: str = "", ret: str = "", conn
             links.append({"site": "Aviasales", "label": label, "url": aviasales_url(org, dst, dep, ret)})
     if connection and connection.get("mode") == "flight" and connection.get("gateway"):
         h, g = connection["hub"], connection["gateway"]
-        links.append({"site": "Skyscanner", "label": f"Connecting flight {h} → {g}", "connection": True,
-                      "url": skyscanner_url(h, g, dep, ret)})
+        # the connecting ticket may leave the day before / come back the day after (hotel night)
+        cdep, cret = connection.get("conn_depart") or dep, connection.get("conn_return") or ret
+        links.append({"site": "Skyscanner", "label": f"Connecting flight {h} → {g}" + (f" · {cdep[:10]}" if cdep else ""),
+                      "connection": True, "url": skyscanner_url(h, g, cdep, cret)})
     return links
+
+
+def for_origin(links: list[dict], code: str) -> list[dict]:
+    """Searches for this departure airport first (post links are labelled 'VIE → MRU · …')."""
+    return sorted(links or [], key=lambda l: not (l.get("label") or "").upper().startswith(code.upper()))
 
 
 def enrich_from_articles(limit: int = 10) -> dict:
@@ -143,8 +188,12 @@ def enrich_from_articles(limit: int = 10) -> dict:
         rows = (s.query(Offer).filter(Offer.status == "active", Offer.subtype == "flight", Offer.deal_score >= 70,
                                       Offer.booking_links.is_(None))
                 .order_by(Offer.deal_score.desc()).limit(limit * 2).all())
-        targets = [(o.id, o.source_url) for o in rows if PROVIDER_BY_KEY.get(o.provider_key)
-                   and PROVIDER_BY_KEY[o.provider_key].kind == "rss"][:limit]
+        targets, seen_urls = [], set()
+        for o in rows:
+            if PROVIDER_BY_KEY.get(o.provider_key) and PROVIDER_BY_KEY[o.provider_key].kind == "rss" \
+                    and o.source_url not in seen_urls and len(targets) < limit:
+                seen_urls.add(o.source_url)
+                targets.append((o.id, o.source_url))
     with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=20, follow_redirects=True) as c:
         for oid, url in targets:
             links = []
@@ -154,7 +203,8 @@ def enrich_from_articles(limit: int = 10) -> dict:
             except Exception as e:  # keep going; the deal still gets HubFare-built links
                 log.info("article links %s: %s", url, e)
             with session_scope() as s:
-                s.get(Offer, oid).booking_links = links
+                for row in s.query(Offer).filter(Offer.source_url == url, Offer.booking_links.is_(None)).all():
+                    row.booking_links = for_origin(links, row.origin_code)
             out["checked"] += 1
             out["found"] += bool(links)
             time.sleep(2.0)  # polite: one article every 2 s

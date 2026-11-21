@@ -188,7 +188,7 @@ def _origin_match(rule: AlertRule, o: Offer) -> bool:
     if codes & set(rule.origins):
         return True
     if o.origin_code == "EU*":
-        return True
+        return o.subtype == "cruise"  # cruises: flights to the port are priced from your hub; other deals: unknown origin
     if o.origin_code.endswith("*"):
         cc = o.origin_code[:2]
         return any((ORIGIN_PLACES.get(r) and ORIGIN_PLACES[r].country == cc) or (cc == "DE" and ORIGIN_PLACES.get(r) and
@@ -207,8 +207,8 @@ def rule_matches(rule: AlertRule, o: Offer) -> bool:
             return False
     if o.deal_score < (rule.min_score or 0):
         return False
-    price = (o.score_breakdown or {}).get("trip_cost", {}).get("total_pp", o.price_eur) if o.subtype == "cruise" else o.price_eur
-    if rule.max_price and price > rule.max_price:
+    from .scanner import trip_total
+    if rule.max_price and trip_total(o) > rule.max_price:
         return False
     if rule.min_discount_pct and o.discount_pct < rule.min_discount_pct:
         return False

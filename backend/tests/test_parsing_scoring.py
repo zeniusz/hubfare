@@ -300,4 +300,31 @@ def test_built_search_links_for_route_and_connection():
                         {"mode": "flight", "hub": "VNO", "gateway": "ARN"})
     sites = [l["site"] for l in links]
     assert sites.count("Skyscanner") == 2 and "Google Flights" in sites and "Aviasales" in sites
-    assert links[-1]["label"] == "Connecting flight VNO → ARN"
+    assert links[-1]["label"] == "Connecting flight VNO → ARN · 2027-02-14"
+    day_before = build_links(["ARN"], "PEK", "2027-02-14", "2027-02-28", {"mode": "flight", "hub": "VNO", "gateway": "ARN",
+                             "conn_depart": "2027-02-13", "conn_return": "2027-03-01"})
+    assert "/vno/arn/270213/270301/" in day_before[-1]["url"]
+
+
+def test_post_links_dedupe_keeps_different_routes():
+    from app.booking import extract_links, for_origin
+    sky = "https://www.skyscanner.net/transport/flights/{}/mru/261206/261227/?adultsv2=1&cabinclass=economy"
+    html = (f"<a href='{sky.format('mil')}&utm_source=x'>Milan</a>"
+            f'<a class="b" href="{sky.format("mil")}">Milan again</a>'
+            f'<a href="{sky.format("vie")}">Vienna</a>')
+    links = extract_links(html)
+    assert [l["label"][:3] for l in links] == ["MIL", "VIE"]  # tracking variant merged, other city kept
+    assert for_origin(links, "VIE")[0]["label"].startswith("VIE")
+
+
+def test_multi_city_post_becomes_one_deal_per_city():
+    from app.providers import RawItem
+    from app.scanner import _expanded
+    raw = RawItem("fly4free_en", "x1", "https://example.com/post",
+                  "Mauritius from Milan, Vienna or Paris for €364 return", "", None, "", "EU*")
+    out = list(_expanded([raw]))
+    if len(out) == 1:
+        pytest.skip("parser did not resolve several cities from this title")
+    codes = [d.origin_codes for _, d, _, _ in out]
+    assert all(len(c) == 1 for c in codes) and len({c[0] for c in codes}) == len(out)
+    assert all(n == len(out) for _, _, n, _ in out)

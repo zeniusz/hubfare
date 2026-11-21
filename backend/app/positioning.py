@@ -105,6 +105,7 @@ def plan(s, origin_code: str, origin_codes: list[str] | None = None, long_haul: 
             if d <= nearby_km:
                 g = ground_return(d)
                 cand = {"mode": "nearby", "hub": h, "hub_name": ORIGIN_PLACES[h].name, "km": round(d), "price": g,
+                        "gateway": gateway, "gateway_name": ORIGIN_PLACES[gateway].name if gateway in ORIGIN_PLACES else gateway,
                         "estimated": True,
                         "note": f"{round(d)} km from {ORIGIN_PLACES[h].name} – train/bus ≈ €{g} return"}
             else:
@@ -114,7 +115,8 @@ def plan(s, origin_code: str, origin_codes: list[str] | None = None, long_haul: 
                     cand = {"mode": "flight", "hub": h, "hub_name": ORIGIN_PLACES[h].name, "gateway": gateway,
                             "km": round(d), "price": round(dated.price_eur), "airline": dated.airline,
                             "dates": f"{dated.depart_date} – {dated.return_date}", "estimated": False, "date_matched": True,
-                            "hotel_nights": dated.hotel_nights or 0, "connection": dated.detail}
+                            "hotel_nights": dated.hotel_nights or 0, "connection": dated.detail,
+                            "conn_depart": dated.depart_date or "", "conn_return": dated.return_date or ""}
                 elif fare and fare.price_eur:
                     cand = {"mode": "flight", "hub": h, "hub_name": ORIGIN_PLACES[h].name, "gateway": gateway,
                             "km": round(d), "price": round(fare.price_eur), "airline": fare.airline,

@@ -47,12 +47,19 @@ def _my_countries(s) -> set[str]:
 
 def _relevant(o: Offer, my_codes: set[str], my_cc: set[str]) -> bool:
     codes = set(o.origin_codes or [o.origin_code])
-    if codes & my_codes or o.origin_code == "EU*":
+    if codes & my_codes:
         return True
+    if o.origin_code == "EU*":
+        return o.subtype == "cruise"  # unknown departure airport is not "from your airports"
     if o.origin_code.endswith("*"):
         cc = o.origin_code[:2]
         return cc in my_cc or (cc == "DE" and "AT" in my_cc)
     return False
+
+
+def _unresolved(o: Offer) -> bool:
+    """Departure airport unknown: can't be priced from your city, so it never leads a list."""
+    return o.origin_code == "EU*" and o.subtype != "cruise"
 
 
 def _urgency(o: Offer) -> dict:
@@ -64,7 +71,7 @@ def _urgency(o: Offer) -> dict:
     if b.get("last_minute"):
         return {"level": "high", "label": "Last-minute – limited availability"}
     if o.deal_score >= 90:
-        return {"level": "medium", "label": "Exceptional price – likely to sell out"}
+        return {"level": "medium", "label": "Unusually low price – these rarely last long"}
     if age_h > window_h * 0.6:
         return {"level": "medium", "label": f"Published {int(age_h // 24)} days ago – check availability"}
     return {"level": "low", "label": ""}
@@ -89,6 +96,7 @@ def _from_airport(s, o: Offer, d: dict, code: str) -> dict | None:
     d = dict(d)
     d["positioning"] = pos
     d["home_total"] = round(base + extra) if extra else None
+    d["total"] = round(base + extra)
     d["picked_airport"] = code
     d["booking"] = _links(o, d)[:12]  # search links from the picked airport
     return d
@@ -101,16 +109,22 @@ def _links(o: Offer, d: dict) -> list[dict]:
     if o.subtype != "flight":
         return []
     dest = o.dest_iata or (DEST_PLACES[o.dest_key].iata if o.dest_key in DEST_PLACES else "")
+    pos = d.get("positioning") or {}
+    # the airport the main flight leaves from: your hub (home), the nearby airport you reach by train, or the gateway
+    lead = pos.get("hub") if pos.get("mode") == "home" else pos.get("gateway") or o.origin_code
     built = []
     if dest:
-        pos = d.get("positioning") or {}
         origins = [c for c in (o.origin_codes or [o.origin_code]) if not c.endswith("*")]
         if not origins and pos.get("hub"):
             origins = [pos["hub"]]
-        if pos.get("mode") in ("home", "nearby") and pos.get("hub") and pos["hub"] not in origins:
-            origins = [pos["hub"]] + origins
+        if lead and not lead.endswith("*"):
+            origins = [lead] + [c for c in origins if c != lead]
         built = booking.build_links(origins, dest, o.depart_date or "", o.return_date or "", pos)
-    return (o.booking_links or []) + built
+    post = booking.for_origin(o.booking_links or [], lead) if lead else (o.booking_links or [])
+    if lead and post and built and not post[0].get("label", "").upper().startswith(lead.upper()) \
+            and any(l["label"].upper().startswith(lead.upper()) for l in built):
+        return built + post  # the post has no search from this airport: our own search from it comes first
+    return post + built
 
 
 def _cruise_split(tc: dict | None) -> dict | None:
@@ -163,6 +177,9 @@ def ser(o: Offer, my_codes=frozenset(), my_cc=frozenset(), saved=frozenset(), fu
         "port": b.get("trip_cost", {}).get("port"), "lat": o.lat, "lon": o.lon,
         "positioning": b.get("positioning"),
         "home_total": _home_total(o, b),
+        "total": round(scanner.trip_total(o)),
+        "shared_price": b.get("shared_price"),
+        "unresolved": o.origin_code == "EU*" and o.subtype != "cruise",
         "live_status": o.live_status, "live_price": round(o.live_price_eur) if o.live_price_eur else None,
         "live_detail": o.live_detail, "live_checked_at": _iso(o.live_checked_at),
     }
@@ -191,8 +208,7 @@ def _apply_prefs(rows, prefs, my_codes, my_cc):
     out = []
     for o in rows:
         mp = (prefs.get("max_price") or {}).get(o.category)
-        price = (o.score_breakdown or {}).get("trip_cost", {}).get("total_pp", o.price_eur) if o.subtype == "cruise" else o.price_eur
-        if mp and price > mp:
+        if mp and scanner.trip_total(o) > mp:
             continue
         if prefs.get("only_my_airports") and not _relevant(o, my_codes, my_cc):
             continue
@@ -228,15 +244,17 @@ def overview():
             rc = [o for o in rows if o.category == c]
             cats[c] = {"active": len(rc), "new": sum(1 for o in rc if o.first_seen_at > since),
                        "error_fares": sum(1 for o in rc if o.error_fare_flag != "none"),
-                       "best_price": min([round(o.price_eur) for o in rc] or [None]) if rc else None,
+                       "best_price": min([round(scanner.trip_total(o)) for o in rc if not _unresolved(o)] or [None]) if rc else None,
                        "top_score": max([o.deal_score for o in rc] or [0])}
         relevant = [o for o in rows if _relevant(o, my_codes, my_cc)]
-        pool = relevant or rows
-        # best opportunity = highest score among offers whose source link is not known to be gone, with an image
+        # top lists only show trips HubFare can actually price: known departure airport, not failed a live check
+        solid = [o for o in rows if not _unresolved(o) and o.live_status != "unavailable"]
+        pool = [o for o in relevant if o in solid] or solid
         best = next((o for o in pool if o.link_status in ("ok", "unchecked", "blocked")), pool[0] if pool else None)
-        latest = sorted([o for o in rows if o.deal_score >= 70 and (not best or o.id != best.id)],
+        latest = sorted([o for o in solid if o.deal_score >= 70 and (not best or o.id != best.id)],
                         key=lambda o: o.first_seen_at, reverse=True)[:6]
-        urgent = [o for o in rows if _urgency(o)["level"] == "high" and (not best or o.id != best.id)][:5]
+        urgent = [o for o in solid if _urgency(o)["level"] == "high" and (not best or o.id != best.id)][:5]
+        unresolved = [o for o in rows if _unresolved(o)]
         drops = s.query(Offer).filter(Offer.status == "active", Offer.previous_price_eur.isnot(None),
                                       Offer.price_eur < Offer.previous_price_eur).order_by(Offer.price_changed_at.desc()).limit(5).all()
         unread = s.query(Notification).filter(Notification.read.is_(False), Notification.channel == "inapp").count()
@@ -246,7 +264,7 @@ def overview():
             "latest": [ser(o, my_codes, my_cc, saved) for o in latest],
             "expiring": [ser(o, my_codes, my_cc, saved) for o in urgent],
             "price_drops": [ser(o, my_codes, my_cc, saved) for o in drops],
-            "relevant_count": len(relevant), "total_count": len(rows),
+            "relevant_count": len(relevant), "total_count": len(rows), "unresolved_count": len(unresolved),
             "monitoring": _monitoring(s), "unread": unread,
             "my_airports": [a.iata for a in s.query(Airport).filter(Airport.enabled).order_by(Airport.priority, Airport.city)],
             "min_display_score": prefs.get("min_display_score", 60),
@@ -282,14 +300,14 @@ def offers(category: str | None = None, error: bool = False, last_minute: bool =
             q = q.filter(Offer.cabin == cabin)
         if min_score:
             q = q.filter(Offer.deal_score >= min_score)
-        if max_price:
-            q = q.filter(Offer.price_eur <= max_price)
         order = {"score": Offer.deal_score.desc(), "new": Offer.first_seen_at.desc(), "price": Offer.price_eur.asc(),
                  "savings": Offer.savings_eur.desc()}.get(sort, Offer.deal_score.desc())
         rows = _apply_prefs(q.order_by(order).all(), prefs, my_codes, my_cc)
         out = []
         for o in rows:
             d = ser(o, my_codes, my_cc, saved)
+            if max_price and not from_airport and d["total"] > max_price:
+                continue
             if last_minute and not d["last_minute"]:
                 continue
             if origin and origin not in (o.origin_codes or [o.origin_code]) and o.origin_code != origin:
@@ -302,11 +320,11 @@ def offers(category: str | None = None, error: bool = False, last_minute: bool =
                 continue
             if from_airport:
                 d = _from_airport(s, o, d, from_airport.upper())
-                if d is None:
+                if d is None or (max_price and d["total"] > max_price):
                     continue
             out.append(d)
-        if from_airport and sort == "price":
-            out.sort(key=lambda x: x["home_total"] or x["price"])
+        if sort == "price":
+            out.sort(key=lambda x: x["total"])
         return {"items": out[:limit], "count": len(out)}
 
 
@@ -327,7 +345,11 @@ def offer_detail(oid: int):
         d["comparables"] = [{"id": c.id, "origin": c.origin_label, "price": round(c.price_eur), "score": c.deal_score,
                              "provider": c.provider_key, "duplicate": bool(c.duplicate_of)} for c in comps]
         dups = s.query(Offer).filter(Offer.duplicate_of == o.id).all()
-        d["also_seen_at"] = [{"provider": x.provider_key, "url": x.source_url, "price": round(x.price_eur)} for x in dups]
+        d["also_seen_at"] = [{"provider": x.provider_key, "url": x.source_url, "price": round(x.price_eur)}
+                             for x in dups if x.source_url != o.source_url]
+        d["other_cities"] = [{"id": x.id, "origin": x.origin_label, "code": x.origin_code, "total": round(scanner.trip_total(x)),
+                              "positioning": (x.score_breakdown or {}).get("positioning")}
+                             for x in sorted(dups, key=scanner.trip_total) if x.source_url == o.source_url]
         return d
 
 

@@ -124,7 +124,9 @@ function routeLine(d) {
   if (d.origin === "EU*") return `${dest} <span class="muted">· departure airport not specified</span>`;
   return `${esc(d.origin_label)} → ${dest}`;
 }
-const total = (d) => d.home_total || (d.subtype === "cruise" && d.trip_total ? d.trip_total : d.price);
+// one price everywhere (cards, list, drawer, sorting): the whole trip from your home city – computed by the API
+const total = (d) => d.total || d.home_total || (d.subtype === "cruise" && d.trip_total ? d.trip_total : d.price);
+const sharedNote = (d) => d.shared_price ? `lowest of ${d.shared_price.cities} cities in the post – may cost more from ${esc(d.origin_label)}` : "";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const fmtDate = (iso) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? `${+iso.slice(8, 10)} ${MONTHS[+iso.slice(5, 7) - 1]}` : iso || "");
 const bg = (url) => (url ? `style="background-image:url('${esc(url)}')"` : "");
@@ -143,7 +145,7 @@ function dealCard(d, compact = false) {
       ${compact ? "" : facts(d)}
       <div class="row">
         <div><div class="price num">${eur(main)}<small>${mainLabel}</small></div>
-        <div class="ref">${d.home_total && pos && pos.price && d.subtype !== "cruise" ? `${eur(main - pos.price * (d.price_basis === "total" ? 2 : 1))} deal + ${pos.estimated ? "≈" : ""}${eur(pos.price)} ${pos.mode === "nearby" ? "train/bus" : pos.hotel ? "flight + hotel night" : "flight"} · ` : ""}${ref}${d.savings > 0 ? ` · <b>save ${eur(d.savings)}</b>` : ""}</div></div>
+        <div class="ref">${d.home_total && pos && pos.price && d.subtype !== "cruise" ? `${eur(main - pos.price * (d.price_basis === "total" ? 2 : 1))} deal + ${pos.estimated ? "≈" : ""}${eur(pos.price)} ${pos.mode === "nearby" ? "train/bus" : pos.hotel ? "flight + hotel night" : "flight"} · ` : ""}${ref}${d.savings > 0 ? ` · <b>save ${eur(d.savings)}</b>` : ""}${d.shared_price ? `<div class="shared">${sharedNote(d)}</div>` : ""}</div></div>
         ${scoreBadge(d.score)}
       </div>
       ${compact ? "" : `<div class="foot"><span>${esc(d.provider_name)}</span><span>${d.urgency.level === "high" ? `<span style="color:var(--urgent)">${esc(d.urgency.label)}</span>` : "seen " + ago(d.last_seen_at)}</span></div>`}
@@ -232,7 +234,7 @@ async function viewOverview(v) {
     <div class="ov-row">${best}
       <div class="panel side-list"><div class="head"><h3>May disappear soon</h3><span class="muted" style="font-size:12px">${o.expiring.length}</span></div>${exp}</div>
     </div>
-    <div class="section-head"><h2>Latest exceptional deals</h2><span class="muted" style="font-size:12.5px">${o.relevant_count} of ${o.total_count} active deals depart from your airports or markets</span></div>
+    <div class="section-head"><h2>Latest exceptional deals</h2><span class="muted" style="font-size:12.5px">${o.relevant_count} of ${o.total_count} active deals depart from your airports or markets${o.unresolved_count ? ` · ${o.unresolved_count} without a departure airport are kept out of the top lists` : ""}</span></div>
     ${latest}
     <div class="section-head"><h2>Recent price drops</h2></div>
     <div>
@@ -338,7 +340,9 @@ async function openDeal(id) {
         <div><div class="k">Typical comparable</div><div class="v num">${eur(d.reference)}</div><div class="k">${b.history_n ? `${b.history_n} observed prices` : "model reference"}</div></div>
         <div><div class="k">Estimated savings</div><div class="v save num">${eur(d.savings)}</div><div class="k">${Math.round(d.discount)}% below typical</div></div>
       </div></div>
+    ${d.shared_price ? `<div class="sec"><div class="notice warn"><b>Price shared by ${d.shared_price.cities} departure cities.</b> The post gives one "from" price for ${esc(d.shared_price.listed.join(", "))}. It is usually available from only some of them – check the live search for ${esc(d.origin_label)}.</div></div>` : ""}
     ${bookingSection(d)}
+    ${(d.other_cities || []).length ? `<div class="sec"><h4>Same post, other departure cities</h4><div class="breakdown">${d.other_cities.map((c) => `<div class="line"><a href="#" data-open="${c.id}">${esc(c.origin)} (${esc(c.code)})</a><span class="num">${eur(c.total)} <span class="muted">${c.positioning && c.positioning.hub_name ? "from " + esc(c.positioning.hub_name) : ""}</span></span></div>`).join("")}</div></div>` : ""}
     <div class="sec"><h4>Deal Score ${d.score}/100 · ${esc(b.band || "")}</h4>
       <div class="breakdown">
         <div class="line"><span>Base points from ${Math.round(d.discount)}% discount vs. reference</span><span class="pos">${b.base_points ?? "—"}</span></div>
@@ -379,6 +383,7 @@ async function openDeal(id) {
     </div>
     <p class="muted" style="font-size:11.5px;padding:0 24px 24px;margin:0">HubFare never books or pays for anything. Always confirm the final price, baggage and fees with the provider.</p>`;
   $("#dr-close").onclick = closeDeal;
+  dr.querySelectorAll("[data-open]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); openDeal(+a.dataset.open); }));
   $("#dr-save").onclick = async () => { const r = await api(`/offers/${id}/save`, { method: "POST" }); $("#dr-save").innerHTML = ic("saved") + (r.saved ? "Saved" : "Save"); toast(r.saved ? "Saved to your deals" : "Removed from saved"); };
   if (d.history.length > 1 && window.echarts) {
     chart?.dispose();
