@@ -3,7 +3,9 @@
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1            # install + start now
 #   powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 -Uninstall # remove the start-up task
-param([switch]$Uninstall, [string]$BasePython = "python")
+#   ... install-windows.ps1 -Python C:\path\to\venv\Scripts\python.exe   # reuse an existing environment
+#   (useful when Windows Smart App Control blocks DLLs in a freshly downloaded environment)
+param([switch]$Uninstall, [string]$BasePython = "python", [string]$Python = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $task = "HubFare"
@@ -15,7 +17,7 @@ if ($Uninstall) {
   exit 0
 }
 
-$venvPy = Join-Path $root ".venv\Scripts\python.exe"
+$venvPy = if ($Python) { $Python } else { Join-Path $root ".venv\Scripts\python.exe" }
 if (-not (Test-Path $venvPy)) {
   Write-Host "Creating virtual environment..."
   & $BasePython -m venv (Join-Path $root ".venv")
@@ -29,7 +31,8 @@ if (-not (Test-Path (Join-Path $root ".env"))) {
 
 $runner = Join-Path $root "scripts\run-windows.ps1"
 $action = New-ScheduledTaskAction -Execute "powershell.exe" `
-  -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`"" -WorkingDirectory $root
+  -Argument ("-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`"" + $(if ($Python) { " -Python `"$Python`"" } else { "" })) `
+  -WorkingDirectory $root
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
   -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
