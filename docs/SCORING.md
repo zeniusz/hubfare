@@ -91,3 +91,19 @@ Offers below the "show deals with score ≥" setting (default 60) are stored for
 * Hotel quality is inferred from stars only; reviews are not yet considered.
 * Cruise fees, transfers and hotel are estimates; flight cost to the port uses the cheapest fare currently
   in the database for that region, else the regional reference.
+
+## Honest prices
+
+- **One deal per departure city.** When a post lists several cities with one "from" price
+  ("Milan, Vienna, Paris → Mauritius from €364"), HubFare creates a separate deal for each city.
+  Each one is priced from your hub via that city. The city that works best for you leads the card,
+  and the others are listed in the deal panel. The price is labelled "lowest of N cities in the post",
+  and its confidence is lowered, because the post doesn't say which city has it.
+- **Unknown departure airport.** Deals that don't name a departure airport (cruises excepted) never
+  appear in the best, latest or urgent lists. They also don't count as "from your airports" and don't
+  trigger alerts with an origin filter.
+- **One total everywhere.** The card price, list sorting, max-price filters, preferences and alert
+  budgets all use the same number: the whole trip from your home city. That is the live or
+  advertised fare, plus getting to the departure airport, plus cruise extras.
+- **Booking links** start from the airport the trip actually leaves from. Connecting-flight searches
+  use the connection's own dates (for example, the day before plus a hotel night).
