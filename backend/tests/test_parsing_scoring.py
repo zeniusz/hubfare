@@ -328,3 +328,10 @@ def test_multi_city_post_becomes_one_deal_per_city():
     codes = [d.origin_codes for _, d, _, _ in out]
     assert all(len(c) == 1 for c in codes) and len({c[0] for c in codes}) == len(out)
     assert all(n == len(out) for _, _, n, _ in out)
+
+
+def test_travel_window_in_past_year_expires():
+    from app.scanner import _past_window
+    assert _past_window("im Dezember 2024", 2026)
+    assert not _past_window("Dec 2026 – Jan 2027", 2026)
+    assert not _past_window("flexible dates", 2026)

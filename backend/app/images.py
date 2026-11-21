@@ -15,14 +15,11 @@ log = logging.getLogger(__name__)
 
 # Better-looking Wikipedia articles for some destinations
 WIKI_TITLE = {
-    "colombo": "Sri Lanka", "maldives": "Maldives", "bangkok": "Bangkok", "thailand": "Phi Phi Islands",
-    "phuket": "Phuket province", "bali": "Bali", "tokyo": "Tokyo", "japan": "Mount Fuji", "zanzibar": "Zanzibar",
-    "canaries": "Tenerife", "egypt": "Hurghada", "capeverde": "Cape Verde", "caribbean": "Caribbean",
-    "stlucia": "Saint Lucia", "cancun": "Cancún", "puntacana": "Punta Cana", "riodejaneiro": "Rio de Janeiro",
+    "bangkok": "Bangkok", "thailand": "Phi Phi Islands",
+    "phuket": "Phuket province", "tokyo": "Tokyo", "japan": "Mount Fuji",     "canaries": "Tenerife", "egypt": "Hurghada",     "stlucia": "Saint Lucia", "cancun": "Cancún", "puntacana": "Punta Cana", "riodejaneiro": "Rio de Janeiro",
     "saopaulo": "São Paulo", "newyork": "New York City", "hongkong": "Hong Kong", "sydney": "Sydney",
-    "auckland": "New Zealand", "seychelles": "Seychelles", "mauritius": "Mauritius", "lapland": "Lapland (Finland)",
-    "usa": "United States", "shanghai": "Shanghai", "jakarta": "Indonesia", "kualalumpur": "Kuala Lumpur",
-    "vietnam": "Ha Long Bay", "aruba": "Curaçao", "mallorca": "Mallorca", "madeira": "Madeira", "iceland": "Iceland",
+    "auckland": "New Zealand", "lapland": "Lapland (Finland)",
+    "usa": "United States", "shanghai": "Shanghai",     "vietnam": "Ha Long Bay", "mallorca": "Mallorca", "iceland": "Iceland",
     "kazakhstan": "Almaty", "taipei": "Taipei", "toronto": "Toronto", "miami": "Miami", "losangeles": "Los Angeles",
     # country-level destinations: use a scenic article (country articles lead with a flag or map)
     "cyprus": "Ayia Napa", "malta": "Valletta", "barbados": "Bridgetown", "tropea": "Tropea", "sardinia": "Costa Smeralda",

@@ -90,7 +90,7 @@ function renderMonitoring(m, airports) {
 }
 
 /* ------------------------------------------------------------------ cards */
-const scoreCls = (s) => (s >= 95 ? "s95" : s >= 85 ? "s85" : s >= 70 ? "s70" : "");
+const scoreCls = (s) => (s >= 90 ? "s90" : s >= 75 ? "s75" : "");
 const scoreBadge = (s) => `<div class="score ${scoreCls(s)}" title="Deal Score">${s}</div>`;
 const basisLabel = (d) => d.price_basis === "total" ? "total for 2" : d.price_basis === "per_night" ? "/night" : d.subtype === "flight" ? (d.trip_type === "one_way" ? "one-way" : "return") : "pp";
 function tags(d) {
@@ -110,7 +110,7 @@ function facts(d) {
   if (d.subtype === "flight" && d.baggage === "included") f.push(`<span>${ic("bag")}Bag included</span>`);
   if (d.port) f.push(`<span>${ic("pin")}From ${esc(d.port)}</span>`);
   if (d.depart_date && f.length < 3) f.push(`<span>${ic("clock")}${esc(fmtDate(d.depart_date))} – ${esc(fmtDate(d.return_date))}</span>`);
-  if (d.live_status === "confirmed") f.unshift(`<span class="lv ok">✓ Live price checked</span>`);
+  if (d.live_status === "confirmed") f.unshift(`<span class="lv ok">✓ Similar live fare found</span>`);
   else if (d.live_status === "higher") f.unshift(`<span class="lv warn">Price rose – re-scored at ${eur(d.live_price)}</span>`);
   else if (d.live_status === "unavailable") f.unshift(`<span class="lv warn">No matching live offer</span>`);
   if (d.travel_window && f.length < 3) f.push(`<span>${ic("clock")}${esc(d.travel_window.slice(0, 28))}</span>`);
@@ -129,7 +129,9 @@ const total = (d) => d.total || d.home_total || (d.subtype === "cruise" && d.tri
 const sharedNote = (d) => d.shared_price ? `lowest of ${d.shared_price.cities} cities in the post – may cost more from ${esc(d.origin_label)}` : "";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const fmtDate = (iso) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? `${+iso.slice(8, 10)} ${MONTHS[+iso.slice(5, 7) - 1]}` : iso || "");
-const bg = (url) => (url ? `style="background-image:url('${esc(url)}')"` : "");
+const hue = (t) => [...(t || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+const bg = (url, name) => (url ? `style="background-image:url('${esc(url)}')"`
+  : `data-noimg style="--h:${hue(name)}"`);
 function dealCard(d, compact = false) {
   const pos = d.positioning;
   const main = total(d);
@@ -139,7 +141,7 @@ function dealCard(d, compact = false) {
     d.subtype === "cruise" ? `Cruise fare ${eur(d.price)} · typical trip ${eur(d.reference)}` :
     d.price_for_two && !d.home_total ? `${eur(d.price_for_two)} for 2 · typical ${eur(d.reference)}` : `typical ${eur(d.reference)}`;
   return `<article class="panel deal" data-id="${d.id}" tabindex="0">
-    <div class="ph" ${bg(d.image)}><div class="tags">${tags(d)}</div><div class="dest">${esc(d.dest)}</div></div>
+    <div class="ph" ${bg(d.image, d.dest)}><div class="tags">${tags(d)}</div><div class="dest">${esc(d.dest)}</div></div>
     <div class="body">
       <div class="from">${routeLine(d)}</div>
       ${compact ? "" : facts(d)}
@@ -165,12 +167,12 @@ function fromOptions(sel) {
 function bookingSection(d) {
   const links = d.booking || [];
   if (!links.length) return "";
-  const fromPost = links.filter((l) => l.from_post), built = links.filter((l) => !l.from_post);
   const row = (l) => `<a class="book-link" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">
-      <span class="site">${esc(l.site)}</span><span class="lbl">${esc(l.label)}</span>${ic("ext")}</a>`;
+      <span class="site">${esc(l.site)}</span><span class="lbl">${esc(l.label)}${l.from_post ? ' <em>from the post</em>' : ""}</span>${ic("ext")}</a>`;
+  const top = links.slice(0, 2), rest = links.slice(2);
   return `<div class="sec"><h4>Search &amp; book</h4>
-    ${fromPost.length ? `<div class="muted" style="font-size:12px;margin-bottom:6px">Exact searches from the original post</div><div class="book-list">${fromPost.map(row).join("")}</div>` : ""}
-    ${built.length ? `<div class="muted" style="font-size:12px;margin:${fromPost.length ? 12 : 0}px 0 6px">${d.depart_date ? "Live searches for these dates" : "Live searches – pick your dates on the site"}</div><div class="book-list">${built.map(row).join("")}</div>` : ""}
+    <div class="book-list">${top.map(row).join("")}</div>
+    ${rest.length ? `<details class="more-links"><summary>${rest.length} more searches (other dates, cities and sites)</summary><div class="book-list">${rest.map(row).join("")}</div></details>` : ""}
     <div class="muted" style="font-size:11.5px;margin-top:8px">Opens a live search – the advertised price may have changed. HubFare never books anything.</div></div>`;
 }
 function listRow(d) {
@@ -184,7 +186,7 @@ function listRow(d) {
     <span class="r">${scoreBadge(d.score)}</span></div>`;
 }
 function miniRow(d, sub) {
-  return `<div class="mini" data-id="${d.id}"><div class="thumb" ${bg(d.image)}></div>
+  return `<div class="mini" data-id="${d.id}"><div class="thumb" ${bg(d.image, d.dest)}></div>
     <div style="min-width:0"><div class="t">${routeLine(d)}</div><div class="s">${esc(sub)}</div></div>
     <div class="p num">${eur(total(d))}<small>${d.score}/100</small></div></div>`;
 }
@@ -214,7 +216,7 @@ async function viewOverview(v) {
   }).join("");
   const b = o.best;
   const best = b ? `<article class="panel best" data-id="${b.id}">
-      <div class="bg" ${bg(b.image)}></div>
+      <div class="bg" ${bg(b.image, b.dest)}></div>
       <div class="inner">
         <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag flat">Best opportunity</span>${tags(b)}</div>
         <div><h3>${esc(b.dest)}</h3><div class="route">${routeLine(b)} · ${CAT_META[b.category].label}</div></div>
@@ -232,7 +234,7 @@ async function viewOverview(v) {
   v.innerHTML = `
     <div class="cat-grid">${cats}</div>
     <div class="ov-row">${best}
-      <div class="panel side-list"><div class="head"><h3>May disappear soon</h3><span class="muted" style="font-size:12px">${o.expiring.length}</span></div>${exp}</div>
+      <div class="panel side-list"><div class="head"><h3>Last-minute &amp; short-lived</h3><span class="muted" style="font-size:12px">${o.expiring.length}</span></div>${exp}</div>
     </div>
     <div class="section-head"><h2>Latest exceptional deals</h2><span class="muted" style="font-size:12.5px">${o.relevant_count} of ${o.total_count} active deals depart from your airports or markets${o.unresolved_count ? ` · ${o.unresolved_count} without a departure airport are kept out of the top lists` : ""}</span></div>
     ${latest}
@@ -331,7 +333,7 @@ async function openDeal(id) {
     ? `From ${esc(d.positioning.hub_name)}: ${eur(d.subtype === "cruise" && d.trip_total ? d.trip_total : d.price)} deal + ${d.positioning.estimated ? "≈" : ""}${eur(d.positioning.price)} getting there`
     : d.price_basis === "total" ? "Total for 2 travellers" : d.subtype === "flight" ? "Per person" : `Per person · ${eur(d.price_for_two)} for 2`;
   dr.innerHTML = `
-    <div class="hero" ${bg(d.image)}><button class="icon-btn close" id="dr-close" aria-label="Close">${ic("x")}</button>
+    <div class="hero" ${bg(d.image, d.dest)}><button class="icon-btn close" id="dr-close" aria-label="Close">${ic("x")}</button>
       <div class="h"><div style="display:flex;gap:6px;flex-wrap:wrap">${tags(d)}</div><h2>${esc(d.dest)}</h2>
       <div class="muted" style="color:var(--text-2)">${esc(d.origin_label)} → ${esc(d.dest)}${d.dest_country !== d.dest ? ", " + esc(d.dest_country) : ""} · ${CAT_META[d.category].label}</div></div></div>
     <div class="sec">${flagNotice}${urg}
@@ -633,6 +635,8 @@ async function route() {
     v.innerHTML = `<div class="notice err">Could not load data: ${esc(e.message)}. Is the API running?</div>`;
   }
   window.scrollTo(0, 0);
+  const deal = new URLSearchParams(location.hash.split("?")[1] || "").get("deal");  // shareable: #/flights?deal=123
+  if (deal) openDeal(+deal);
 }
 
 window.addEventListener("hashchange", route);

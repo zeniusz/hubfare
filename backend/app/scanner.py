@@ -164,6 +164,9 @@ def _score_offer(s, o: Offer, d: ParsedDeal, enabled_codes: set[str], text: str)
     o.discount_pct = res["discount_pct"]
     res.update(breakdown_extra)
     res["shared_price"] = (o.score_breakdown or {}).get("shared_price")
+    multi = [c for c in dict.fromkeys(o.origin_codes or []) if not c.endswith("*") and c in ORIGIN_PLACES]
+    if not res["shared_price"] and len(multi) > 1:  # older multi-city offer that was never split
+        res["shared_price"] = {"cities": len(multi), "listed": [ORIGIN_PLACES[c].name for c in multi]}
     if res["shared_price"]:
         res["modifiers"].append({"label": f"price is the lowest of {res['shared_price']['cities']} cities in the post – "
                                           "this city may cost more", "points": 0})
@@ -408,6 +411,13 @@ def run_provider(key: str) -> dict:
     return result
 
 
+def _past_window(window: str | None, year: int) -> bool:
+    """'im Dezember 2024' in a 2026 scan: every year the travel window names is already over."""
+    import re
+    years = [int(y) for y in re.findall(r"\b(20\d\d)\b", window or "")]
+    return bool(years) and max(years) < year
+
+
 def expire_offers() -> int:
     n = 0
     now = utcnow()
@@ -418,7 +428,7 @@ def expire_offers() -> int:
             limit = EXPIRY_DAYS.get(o.subtype, 14)
             stale_api = o.provider_key in ("travelpayouts", "tp_calendar", "tp_special") and o.last_seen_at < now - timedelta(hours=26 if o.provider_key == "tp_calendar" else 8)
             blog_flight = o.subtype == "flight" and o.provider_key not in ("travelpayouts", "tp_calendar", "tp_special") and not RSS_FLIGHTS
-            departed = o.depart_date and o.depart_date < now.strftime("%Y-%m-%d")
+            departed = (o.depart_date and o.depart_date < now.strftime("%Y-%m-%d")) or _past_window(o.travel_window, now.year)
             if age_ref < now - timedelta(days=limit) or stale_api or blog_flight or o.provider_key in disabled or departed \
                     or excluded_origin(o.origin_codes or [o.origin_code]) or o.link_status == "gone":
                 o.status = "expired"
